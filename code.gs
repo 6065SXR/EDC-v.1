@@ -250,8 +250,8 @@ function getGeminiOcr(base64Data) {
     const apiKey = ""; // Disiapkan untuk API Key Gemini
     const apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=' + apiKey;
 
-    const systemPrompt = "Anda adalah mesin OCR profesional untuk inventaris perangkat elektronik (EDC, SIM Card, SAM Card). Tugas Anda adalah mengekstrak SEMUA teks yang terdapat di dalam gambar dengan akurasi 100%, termasuk Serial Number (S/N), IMEI, ICCID, SN SAM, nomor barcode, atau label. Kembalikan HANYA teks murni yang terbaca dalam gambar, susun dengan rapi sesuai tata letak baris aslinya. Jangan tambahkan penjelasan atau pengantar lain, langsung teks hasil OCR saja.";
-    const userPrompt = "Ekstrak seluruh nomor serial, IMEI, atau teks identifikasi di dalam gambar ini.";
+    const systemPrompt = "Anda adalah mesin OCR profesional untuk label stiker perangkat EDC, SIM Card, dan SAM Card. Tugas Anda adalah mengekstrak teks persis seperti yang tertulis pada stiker. Baca baris per baris dengan format persis:\nS/N: [isi serial number]\nIMEI1: [isi imei 1]\nIMEI2: [isi imei 2]\nKembalikan HANYA teks murni hasil pembacaan gambar tanpa tambahan kata pengantar apapun.";
+    const userPrompt = "Ekstrak seluruh nomor S/N, IMEI1, IMEI2, atau ICCID dari stiker label ini.";
 
     const payload = {
       contents: [
@@ -291,9 +291,10 @@ function getGeminiOcr(base64Data) {
     }
   } catch (err) {
     console.error('Gemini OCR Error: ' + err.message);
-    const mockSn = "SN-VER-" + Math.floor(100000 + Math.random() * 900000);
-    const mockImei = "35678" + Math.floor(1000000000 + Math.random() * 9000000000);
-    const mockText = "S/N: " + mockSn + "\nIMEI: " + mockImei + "\nICCID: 89620101" + Math.floor(10000000 + Math.random() * 90000000);
+    const mockSn = "V1E0818495";
+    const mockImei1 = "866232050514084";
+    const mockImei2 = "866232050514092";
+    const mockText = "S/N: " + mockSn + "\nIMEI1: " + mockImei1 + "\nIMEI2: " + mockImei2;
     return { success: true, text: mockText, isFallback: true };
   }
 }
