@@ -20,10 +20,10 @@
       { ID_EDC: 'EDC-0002', Vendor: 'Verifone', Lokasi: 'Bandung', Type_EDC: 'V4 Colour', SN: 'V1E0818496', IMEI: '866232050514085', Completeness: 'Complete', Condition: 'Good', Status: 'Backup', Foto_Drive_URL: '', Note: 'Persiapan Support', Created_By: 'admin' }
     ],
     sim: [
-      { ID_SIM: 'SIM-0001', Provider: 'Telkomsel', ICCID_SN: '8962010198273641', Status: 'Available', Note: 'Stok Baru', Created_By: 'admin' }
+      { ID_SIM: 'SIM-0001', Provider: 'Telkomsel', ICCID_SN: '621000159010427600', Status: 'Available', Note: 'Stok Baru', Created_By: 'admin' }
     ],
     sam: [
-      { ID_SAM: 'SAM-0001', Provider: 'SAM BRI', ICCID_SN: '890100291827361', Status: 'Available', Note: 'Master Key Aktif', Created_By: 'superuser' }
+      { ID_SAM: 'SAM-0001', Provider: 'SAM BRI', ICCID_SN: '8E9C', Status: 'Available', Note: 'Master Key Aktif', Created_By: 'superuser' }
     ]
   };
 
@@ -553,7 +553,6 @@
     const config = { fps: 15, qrbox: { width: 220, height: 140 } };
 
     const handleScanSuccess = (decodedText) => {
-      // Direct Live Camera Barcode
       if (currentScanTargetInputId) {
         const cleanVal = filterOcrByContext(decodedText, currentScanTargetInputId);
         const inputEl = document.getElementById(currentScanTargetInputId);
@@ -593,34 +592,78 @@
     });
   }
 
+  function compressImageAndProcess(file, callback) {
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      const img = new Image();
+      img.onload = function() {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+        const maxDim = 1280; // Optimal resolution for sharp OCR text reading
+
+        if (width > maxDim || height > maxDim) {
+          if (width > height) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          } else {
+            width = Math.round((width * maxDim) / height);
+            height = maxDim;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+
+        // Export compressed JPEG base64 (approx ~150KB - 250KB for ultra fast transmission)
+        const compressedBase64 = canvas.toDataURL('image/jpeg', 0.82);
+        callback(compressedBase64);
+      };
+      img.onerror = function() {
+        callback(e.target.result);
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  }
+
   function processImageScanOrOcr(fileInput) {
     if (!fileInput.files || fileInput.files.length === 0) return;
     const file = fileInput.files[0];
 
+    // Safely stop live video camera scanner if running
+    if (html5QrCode && html5QrCode.isScanning) {
+      html5QrCode.stop().catch(() => {});
+    }
+
+    // Hide reader container & result box, show persistent "Wait a Moment..." loading spinner
     document.getElementById('reader-container').classList.add('hidden');
+    document.getElementById('ai-lens-result-box').classList.add('hidden');
+
     const loadingBox = document.getElementById('ai-lens-loading');
     loadingBox.classList.remove('hidden');
     loadingBox.classList.add('flex');
 
-    showToast('Membaca stiker label dengan AI Lens...', 'info');
-
-    const reader = new FileReader();
-    reader.onload = function(e) {
-      const base64Data = e.target.result;
-      callGeminiOcrApi(base64Data);
-    };
-    reader.readAsDataURL(file);
+    // Compress image before sending to eliminate upload lag
+    compressImageAndProcess(file, function(compressedBase64) {
+      callGeminiOcrApi(compressedBase64);
+    });
   }
 
   function callGeminiOcrApi(base64Data) {
     if (IS_CANVAS_PREVIEW) {
       setTimeout(() => {
-        let mockSn = "V1E0818495";
-        let mockImei1 = "866232050514084";
-        let mockImei2 = "866232050514092";
-        let mockResult = "S/N: " + mockSn + "\nIMEI1: " + mockImei1 + "\nIMEI2: " + mockImei2;
+        let mockResult = "S/N: V1E0818495\nIMEI1: 866232050514084\nIMEI2: 866232050514092";
+        if (currentScanTargetInputId && currentScanTargetInputId.includes('sim')) {
+          mockResult = "6210\n0015\n9010\n4276\n00";
+        } else if (currentScanTargetInputId && currentScanTargetInputId.includes('sam')) {
+          mockResult = "8E9C";
+        }
         showAiLensResult(mockResult);
-      }, 800);
+      }, 600);
       return;
     }
 
@@ -637,57 +680,28 @@
         showToast('AI Lens Error: ' + err.message, 'error');
         resetAiLensModal();
       })
-      .getGeminiOcr(base64Data);
+      .getGeminiOcr(base64Data, currentScanTargetInputId);
   }
 
-  /**
-   * Smart Context Filter: Mengisolasi nilai murni (S/N / IMEI1 / ICCID) berdasarkan tombol scan yang diklik
-   */
   function filterOcrByContext(fullText, targetInputId) {
     if (!fullText) return '';
     const lines = fullText.split('\n');
     const targetLower = (targetInputId || '').toLowerCase();
     let matchedValue = '';
 
-    for (let line of lines) {
-      let trimmed = line.trim();
-      if (!trimmed) continue;
-      let upper = trimmed.toUpperCase();
-
-      // Kasus 1: Target input IMEI -> Ambil IMEI1 atau IMEI
-      if (targetLower.includes('imei')) {
+    // Kasus 1: Target input IMEI -> Ambil IMEI1 atau IMEI
+    if (targetLower.includes('imei')) {
+      for (let line of lines) {
+        let trimmed = line.trim();
+        let upper = trimmed.toUpperCase();
         if (upper.includes('IMEI1') || upper.includes('IMEI 1')) {
           matchedValue = trimmed.replace(/^IMEI1?[:\s\-]*/i, '').trim();
           break;
         } else if (upper.includes('IMEI') && !matchedValue) {
           matchedValue = trimmed.replace(/^IMEI\d*[:\s\-]*/i, '').trim();
         }
-      } 
-      // Kasus 2: Target input Serial Number (SN) EDC -> Ambil S/N
-      else if (targetLower.includes('sn') && !targetLower.includes('sim') && !targetLower.includes('sam')) {
-        if (upper.includes('S/N') || upper.includes('SN') || upper.includes('SERIAL')) {
-          matchedValue = trimmed
-            .replace(/^(S\/N|SN|SERIAL)[:\s\-]*/i, '')
-            .replace(/^SN-VER-/i, '')
-            .trim();
-          break;
-        }
-      } 
-      // Kasus 3: Target input SIM / SAM Card -> Ambil ICCID / S/N
-      else if (targetLower.includes('iccid') || targetLower.includes('sim') || targetLower.includes('sam')) {
-        if (upper.includes('ICCID') || upper.includes('S/N') || upper.includes('SN')) {
-          matchedValue = trimmed
-            .replace(/^(ICCID|S\/N|SN)[:\s\-]*/i, '')
-            .trim();
-          break;
-        }
       }
-    }
-
-    // Fallback: Jika stiker label tidak menggunakan awalan S/N: atau IMEI1:
-    if (!matchedValue) {
-      if (targetLower.includes('imei')) {
-        // Cari deretan 14 - 16 angka khas IMEI
+      if (!matchedValue) {
         for (let line of lines) {
           let digits = line.replace(/\D/g, '');
           if (digits.length >= 14 && digits.length <= 16) {
@@ -695,13 +709,72 @@
             break;
           }
         }
-      } else if (targetLower.includes('sn')) {
-        // Cari pola kode unik EDC (contoh: V1E0818495)
+      }
+    } 
+    // Kasus 2: Target input Serial Number (SN) EDC -> Ambil S/N
+    else if (targetLower.includes('sn') && !targetLower.includes('sim') && !targetLower.includes('sam')) {
+      for (let line of lines) {
+        let trimmed = line.trim();
+        let upper = trimmed.toUpperCase();
+        if (upper.includes('S/N') || upper.includes('SN') || upper.includes('SERIAL')) {
+          matchedValue = trimmed
+            .replace(/^(S\/N|SN|SERIAL)[:\s\-]*/i, '')
+            .replace(/^SN-VER-/i, '')
+            .trim();
+          break;
+        }
+      }
+      if (!matchedValue) {
         for (let line of lines) {
           let trimmed = line.trim();
           let match = trimmed.match(/[A-Z0-9]{8,15}/i);
           if (match && !trimmed.toUpperCase().includes('IMEI') && !trimmed.toUpperCase().includes('MAC')) {
             matchedValue = match[0];
+            break;
+          }
+        }
+      }
+    } 
+    // Kasus 3: Target input SIM Card -> Penggabungan angka bertumpuk (ICCID / Multi-line numbers)
+    else if (targetLower.includes('sim')) {
+      for (let line of lines) {
+        let trimmed = line.trim();
+        let upper = trimmed.toUpperCase();
+        if (upper.includes('ICCID') || upper.includes('S/N') || upper.includes('SN')) {
+          matchedValue = trimmed.replace(/^(ICCID|S\/N|SN)[:\s\-]*/i, '').trim();
+          break;
+        }
+      }
+      if (!matchedValue) {
+        let accumulatedDigits = '';
+        for (let line of lines) {
+          let digitsOnly = line.replace(/\D/g, '');
+          // Mengumpulkan baris yang berisi digit angka murni kartu SIM (mengabaikan baris EDC)
+          if (digitsOnly.length > 0 && !line.toUpperCase().includes('IMEI') && !line.toUpperCase().includes('MAC')) {
+            accumulatedDigits += digitsOnly;
+          }
+        }
+        if (accumulatedDigits.length >= 8) {
+          matchedValue = accumulatedDigits;
+        }
+      }
+    }
+    // Kasus 4: Target input SAM Card -> Kode alfanumerik murni fisik kartu SAM (contoh: 8E9C)
+    else if (targetLower.includes('sam')) {
+      for (let line of lines) {
+        let trimmed = line.trim();
+        let upper = trimmed.toUpperCase();
+        if (upper.includes('ICCID') || upper.includes('S/N') || upper.includes('SN') || upper.includes('SAM')) {
+          matchedValue = trimmed.replace(/^(ICCID|S\/N|SN|SAM)[:\s\-]*/i, '').trim();
+          break;
+        }
+      }
+      if (!matchedValue) {
+        for (let line of lines) {
+          let trimmed = line.trim().replace(/[^A-Za-z0-9]/g, '');
+          // Mengisolasikan kode alfanumerik ringkas murni chip SAM (3 hingga 8 karakter)
+          if (trimmed.length >= 3 && trimmed.length <= 10 && !trimmed.toUpperCase().includes('IMEI') && !trimmed.toUpperCase().includes('CHINA')) {
+            matchedValue = trimmed;
             break;
           }
         }
@@ -712,9 +785,8 @@
       matchedValue = fullText.trim();
     }
 
-    // Pembersihan ekstra: Membuang sisa awalan label atau spasi samping
     return matchedValue
-      .replace(/^(S\/N|SN|SERIAL|IMEI1?|IMEI2?|ICCID)[:\s\-]*/i, '')
+      .replace(/^(S\/N|SN|SERIAL|IMEI1?|IMEI2?|ICCID|SAM)[:\s\-]*/i, '')
       .replace(/^SN-VER-/i, '')
       .replace(/^[:\s\-]+/, '')
       .split(' ')[0]
@@ -722,18 +794,25 @@
   }
 
   function showAiLensResult(extractedText) {
-    document.getElementById('ai-lens-loading').classList.add('hidden');
-    document.getElementById('ai-lens-loading').classList.remove('flex');
+    const loadingCon = document.getElementById('ai-lens-loading');
+    if (loadingCon) {
+      loadingCon.classList.add('hidden');
+      loadingCon.classList.remove('flex');
+    }
     
     const resultBox = document.getElementById('ai-lens-result-box');
-    resultBox.classList.remove('hidden');
-    resultBox.classList.add('flex');
+    if (resultBox) {
+      resultBox.classList.remove('hidden');
+      resultBox.classList.add('flex');
+    }
 
-    // Mengisolasi HANYA nilai spesifik murni sesuai kolom input yang di-scan (SN misal V1E0818495, IMEI misal 866232050514084)
+    // Mengisolasi HANYA nilai spesifik murni sesuai kolom input yang di-scan (SN, IMEI, ICCID SIM, atau Kode SAM)
     const cleanContextValue = filterOcrByContext(extractedText, currentScanTargetInputId);
 
     const textarea = document.getElementById('ai-lens-extracted-text');
-    textarea.value = cleanContextValue;
+    if (textarea) {
+      textarea.value = cleanContextValue;
+    }
 
     if (typeof lucide !== 'undefined') lucide.createIcons();
   }
