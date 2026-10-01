@@ -45,9 +45,9 @@
       <div>
         <label class="block font-semibold text-gray-600 mb-1">Serial Number (SN)</label>
         <div class="flex gap-2">
-          <input type="text" id="edc-sn" required placeholder="Klik untuk scan barcode SN..." onclick="startCameraScanner('edc-sn')" class="w-full px-3 py-2 neu-input cursor-pointer bg-blue-50/40 hover:bg-blue-50 transition">
-          <button type="button" onclick="startCameraScanner('edc-sn')" class="px-3 py-2 neu-btn text-xs flex items-center gap-1 shrink-0">
-            <i data-lucide="scan-barcode" class="w-4 h-4"></i> Scan
+          <input type="text" id="edc-sn" required placeholder="Klik untuk scan barcode / AI Lens..." onclick="startCameraScanner('edc-sn')" class="w-full px-3 py-2 neu-input cursor-pointer bg-blue-50/40 hover:bg-blue-50 transition">
+          <button type="button" onclick="startCameraScanner('edc-sn')" class="px-3 py-2 neu-btn text-xs flex items-center gap-1 shrink-0" title="AI Lens OCR & Scan">
+            <i data-lucide="sparkles" class="w-4 h-4"></i> Scan
           </button>
         </div>
       </div>
@@ -55,9 +55,9 @@
       <div>
         <label class="block font-semibold text-gray-600 mb-1">IMEI EDC</label>
         <div class="flex gap-2">
-          <input type="text" id="edc-imei" required placeholder="Klik untuk scan barcode IMEI..." onclick="startCameraScanner('edc-imei')" class="w-full px-3 py-2 neu-input cursor-pointer bg-blue-50/40 hover:bg-blue-50 transition">
-          <button type="button" onclick="startCameraScanner('edc-imei')" class="px-3 py-2 neu-btn text-xs flex items-center gap-1 shrink-0">
-            <i data-lucide="scan-barcode" class="w-4 h-4"></i> Scan
+          <input type="text" id="edc-imei" required placeholder="Klik untuk scan IMEI / AI Lens..." onclick="startCameraScanner('edc-imei')" class="w-full px-3 py-2 neu-input cursor-pointer bg-blue-50/40 hover:bg-blue-50 transition">
+          <button type="button" onclick="startCameraScanner('edc-imei')" class="px-3 py-2 neu-btn text-xs flex items-center gap-1 shrink-0" title="AI Lens OCR & Scan">
+            <i data-lucide="sparkles" class="w-4 h-4"></i> Scan
           </button>
         </div>
       </div>
@@ -123,9 +123,9 @@
       <div>
         <label class="block font-semibold text-gray-600 mb-1">ICCID / SN SIM Card</label>
         <div class="flex gap-2">
-          <input type="text" id="sim-iccid" required placeholder="Klik untuk scan barcode / foto SIM Card..." onclick="startCameraScanner('sim-iccid')" class="w-full px-3 py-2 neu-input cursor-pointer bg-blue-50/40 hover:bg-blue-50 transition">
-          <button type="button" onclick="startCameraScanner('sim-iccid')" class="px-3 py-2 neu-btn text-xs flex items-center gap-1 shrink-0">
-            <i data-lucide="scan-barcode" class="w-4 h-4"></i> Scan
+          <input type="text" id="sim-iccid" required placeholder="Klik untuk scan barcode / AI Lens..." onclick="startCameraScanner('sim-iccid')" class="w-full px-3 py-2 neu-input cursor-pointer bg-blue-50/40 hover:bg-blue-50 transition">
+          <button type="button" onclick="startCameraScanner('sim-iccid')" class="px-3 py-2 neu-btn text-xs flex items-center gap-1 shrink-0" title="AI Lens OCR & Scan">
+            <i data-lucide="sparkles" class="w-4 h-4"></i> Scan
           </button>
         </div>
       </div>
@@ -170,9 +170,9 @@
       <div>
         <label class="block font-semibold text-gray-600 mb-1">ICCID / SN SAM Card</label>
         <div class="flex gap-2">
-          <input type="text" id="sam-iccid" required placeholder="Klik untuk scan barcode / foto SAM Card..." onclick="startCameraScanner('sam-iccid')" class="w-full px-3 py-2 neu-input cursor-pointer bg-blue-50/40 hover:bg-blue-50 transition">
-          <button type="button" onclick="startCameraScanner('sam-iccid')" class="px-3 py-2 neu-btn text-xs flex items-center gap-1 shrink-0">
-            <i data-lucide="scan-barcode" class="w-4 h-4"></i> Scan
+          <input type="text" id="sam-iccid" required placeholder="Klik untuk scan barcode / AI Lens..." onclick="startCameraScanner('sam-iccid')" class="w-full px-3 py-2 neu-input cursor-pointer bg-blue-50/40 hover:bg-blue-50 transition">
+          <button type="button" onclick="startCameraScanner('sam-iccid')" class="px-3 py-2 neu-btn text-xs flex items-center gap-1 shrink-0" title="AI Lens OCR & Scan">
+            <i data-lucide="sparkles" class="w-4 h-4"></i> Scan
           </button>
         </div>
       </div>
@@ -201,51 +201,81 @@
   </div>
 </div>
 
-<!-- Compact Mobile-Friendly Scanner Modal -->
+<!-- Compact Mobile-Friendly Scanner & AI Lens OCR Modal -->
 <div id="modal-scanner" class="fixed inset-0 z-50 hidden bg-black/70 backdrop-blur-sm flex items-center justify-center p-3">
-  <div class="neu-card p-4 w-full max-w-sm max-h-[85vh] flex flex-col justify-between overflow-hidden shadow-2xl">
+  <div class="neu-card p-4 w-full max-w-sm max-h-[90vh] flex flex-col justify-between overflow-hidden shadow-2xl">
     
-    <!-- Sticky Modal Header with Back / Close Button -->
+    <!-- Header Modal -->
     <div class="flex items-center justify-between border-b border-gray-100 pb-2 mb-2 shrink-0">
       <button type="button" onclick="stopCameraScanner()" class="flex items-center gap-1 text-xs text-softtext hover:text-accent font-semibold transition">
         <i data-lucide="arrow-left" class="w-4 h-4"></i>
         <span>Kembali</span>
       </button>
       <h4 class="font-bold text-gray-800 text-xs flex items-center gap-1.5">
-        <i data-lucide="camera" class="w-4 h-4 text-accent"></i>
-        <span>Scan Barcode / Foto</span>
+        <i data-lucide="sparkles" class="w-4 h-4 text-accent"></i>
+        <span>AI Lens OCR & Scan</span>
       </h4>
       <button type="button" onclick="stopCameraScanner()" class="p-1 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition">
         <i data-lucide="x" class="w-5 h-5"></i>
       </button>
     </div>
 
-    <!-- Compact Constrained Live Video / Photo Preview Container -->
-    <div id="reader-container" class="overflow-hidden rounded-xl bg-slate-900 h-44 relative flex items-center justify-center shrink-0 border border-slate-700">
-      <div id="reader" class="w-full h-full flex items-center justify-center [&_video]:max-h-44 [&_video]:object-contain [&_img]:max-h-44 [&_img]:object-contain"></div>
+    <!-- Scanner Preview / OCR Area -->
+    <div class="space-y-3 overflow-y-auto max-h-[60vh] pr-1">
+      
+      <!-- Video Scanner Container -->
+      <div id="reader-container" class="overflow-hidden rounded-xl bg-slate-900 h-40 relative flex items-center justify-center shrink-0 border border-slate-700">
+        <div id="reader" class="w-full h-full flex items-center justify-center [&_video]:max-h-40 [&_video]:object-contain [&_img]:max-h-40 [&_img]:object-contain"></div>
+      </div>
+
+      <!-- OCR Loading State -->
+      <div id="ai-lens-loading" class="hidden flex-col items-center justify-center py-6 bg-blue-50/50 rounded-xl border border-blue-100">
+        <div class="w-8 h-8 border-3 border-accent border-t-transparent rounded-full animate-spin mb-2"></div>
+        <p class="text-xs font-bold text-gray-800">Membaca Teks dengan Gemini AI...</p>
+        <p class="text-[10px] text-softtext mt-0.5">Mengekstrak S/N, IMEI, & ICCID dari gambar...</p>
+      </div>
+
+      <!-- OCR Result View -->
+      <div id="ai-lens-result-box" class="hidden flex-col gap-2">
+        <div class="flex items-center justify-between">
+          <span class="text-[10px] font-bold text-softtext uppercase tracking-wider">Teks Terdeteksi AI Lens:</span>
+          <span class="text-[10px] text-accent font-semibold">Ready Auto-Fill</span>
+        </div>
+        <textarea id="ai-lens-extracted-text" rows="4" class="w-full p-2.5 text-xs neu-input font-mono bg-white text-gray-800 resize-none" placeholder="Hasil ekstrak AI..."></textarea>
+        
+        <div class="flex gap-2 pt-1">
+          <button type="button" onclick="applyExtractedText()" class="flex-1 py-2 px-3 neu-btn text-xs font-semibold flex items-center justify-center gap-1.5 shadow-sm">
+            <i data-lucide="check-circle" class="w-4 h-4"></i>
+            <span>Gunakan Teks Ini</span>
+          </button>
+          <button type="button" onclick="resetAiLensModal()" class="py-2 px-3 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 text-gray-600 text-xs font-semibold flex items-center justify-center gap-1 transition">
+            <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i>
+            <span>Foto Ulang</span>
+          </button>
+        </div>
+      </div>
+
     </div>
 
-    <!-- Compact Scanner Options -->
+    <!-- Option Buttons -->
     <div class="mt-3 pt-2 border-t border-gray-100 space-y-2 shrink-0">
       <p class="text-[10px] text-gray-500 text-center font-medium">Pilih metode pengambilan gambar:</p>
       
-      <!-- Option 1: Direct HP Camera Capture -->
-      <button type="button" onclick="triggerNativeCamera()" class="inline-flex items-center justify-center gap-2 px-3 py-2 neu-btn bg-accent text-white font-semibold text-xs transition w-full shadow-sm">
-        <i data-lucide="camera" class="w-3.5 h-3.5"></i>
+      <!-- Option 1: AI Lens OCR / Galeri -->
+      <button type="button" onclick="triggerGalleryPicker()" class="inline-flex items-center justify-center gap-2 px-3 py-2.5 neu-btn bg-accent text-white font-semibold text-xs transition w-full shadow-sm">
+        <i data-lucide="sparkles" class="w-4 h-4"></i>
+        <span>AI Lens OCR (Foto / Galeri)</span>
+      </button>
+
+      <!-- Option 2: Direct Camera capture -->
+      <button type="button" onclick="triggerNativeCamera()" class="inline-flex items-center justify-center gap-2 px-3 py-2 rounded-xl border border-blue-200 bg-white text-accent font-semibold text-xs transition w-full hover:bg-blue-50/50 shadow-sm">
+        <i data-lucide="camera" class="w-4 h-4"></i>
         <span>Buka Kamera HP & Foto Barcode</span>
       </button>
 
-      <!-- Option 2: Gallery File Upload -->
-      <button type="button" onclick="triggerGalleryPicker()" class="inline-flex items-center justify-center gap-2 px-3 py-2 rounded-xl border border-blue-200 bg-white text-accent font-semibold text-xs transition w-full hover:bg-blue-50/50 shadow-sm">
-        <i data-lucide="image" class="w-3.5 h-3.5"></i>
-        <span>Upload Foto dari Galeri / File</span>
-      </button>
-
-      <!-- Hidden Input for Direct Camera Capture (capture="environment") -->
-      <input type="file" id="file-barcode-input" accept="image/*" capture="environment" onchange="scanBarcodeFromFile(this)" class="hidden">
-      
-      <!-- Hidden Input for Gallery / Local File Selection (NO capture attribute) -->
-      <input type="file" id="file-gallery-input" accept="image/*" onchange="scanBarcodeFromFile(this)" class="hidden">
+      <!-- Hidden Inputs -->
+      <input type="file" id="file-barcode-input" accept="image/*" capture="environment" onchange="processImageScanOrOcr(this)" class="hidden">
+      <input type="file" id="file-gallery-input" accept="image/*" onchange="processImageScanOrOcr(this)" class="hidden">
     </div>
   </div>
 </div>
