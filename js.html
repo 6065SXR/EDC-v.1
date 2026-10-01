@@ -1,0 +1,688 @@
+<script>
+  const IS_CANVAS_PREVIEW = (typeof google === 'undefined' || !google.script || !google.script.run);
+  
+  let currentUser = null;
+  let html5QrCode = null;
+  let currentScanTargetInputId = null;
+  let debounceTimer = null;
+
+  // Pagination state
+  const paginationState = {
+    EDC: { page: 1, limit: 8, pages: 1 },
+    SIM: { page: 1, limit: 8, pages: 1 },
+    SAM: { page: 1, limit: 8, pages: 1 }
+  };
+
+  // Canvas Mock Database Memory
+  const canvasMock = {
+    edc: [
+      { ID_EDC: 'EDC-0001', Vendor: 'Verifone', Lokasi: 'Jakarta', Type_EDC: 'V2 Colour', SN: 'SN-VER-882191', IMEI: '356781092837101', Completeness: 'Complete', Condition: 'New', Status: 'Available', Foto_Drive_URL: '', Note: 'Ready Gudang Utama', Created_By: 'superuser' },
+      { ID_EDC: 'EDC-0002', Vendor: 'Verifone', Lokasi: 'Bandung', Type_EDC: 'V4 Colour', SN: 'SN-VER-882192', IMEI: '356781092837102', Completeness: 'Complete', Condition: 'Good', Status: 'Backup', Foto_Drive_URL: '', Note: 'Persiapan Support', Created_By: 'admin' }
+    ],
+    sim: [
+      { ID_SIM: 'SIM-0001', Provider: 'Telkomsel', ICCID_SN: '8962010198273641', Status: 'Available', Note: 'Stok Baru', Created_By: 'admin' }
+    ],
+    sam: [
+      { ID_SAM: 'SAM-0001', Provider: 'SAM BRI', ICCID_SN: '890100291827361', Status: 'Available', Note: 'Master Key Aktif', Created_By: 'superuser' }
+    ]
+  };
+
+  document.addEventListener('DOMContentLoaded', function() {
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+    if (IS_CANVAS_PREVIEW) {
+      showToast('Running in Gemini Canvas Preview Mode', 'info');
+    }
+  });
+
+  function showToast(message, type = 'success') {
+    const container = document.getElementById('toast-container');
+    if (!container) return;
+    const toast = document.createElement('div');
+    
+    let bg = 'bg-slate-900 text-white';
+    if (type === 'success') bg = 'bg-emerald-600 text-white';
+    if (type === 'error') bg = 'bg-rose-600 text-white';
+    if (type === 'info') bg = 'bg-blue-600 text-white';
+
+    toast.className = bg + ' px-4 py-3 rounded-xl shadow-lg text-xs font-medium flex items-center justify-between transition-all duration-300 transform translate-y-2 opacity-0 pointer-events-auto';
+    toast.innerHTML = '<span>' + message + '</span><button onclick="this.parentElement.remove()" class="ml-3 opacity-70 hover:opacity-100">&times;</button>';
+
+    container.appendChild(toast);
+    setTimeout(() => {
+      toast.classList.remove('translate-y-2', 'opacity-0');
+    }, 10);
+
+    setTimeout(() => {
+      toast.classList.add('opacity-0');
+      setTimeout(() => toast.remove(), 300);
+    }, 5000);
+  }
+
+  function quickFill(role) {
+    const uInput = document.getElementById('login-username');
+    const pInput = document.getElementById('login-password');
+    if (role === 'superuser') { uInput.value = 'superuser'; pInput.value = 'admin123'; }
+    if (role === 'admin') { uInput.value = 'admin'; pInput.value = 'admin123'; }
+    if (role === 'engineer') { uInput.value = 'engineer'; pInput.value = 'eng123'; }
+    if (role === 'customer') { uInput.value = 'customer'; pInput.value = 'cust123'; }
+  }
+
+  function handleLogin(e) {
+    e.preventDefault();
+    const u = document.getElementById('login-username').value.trim();
+    const p = document.getElementById('login-password').value;
+    const btn = document.getElementById('btn-login-submit');
+
+    btn.disabled = true;
+    btn.innerHTML = '<span>Memeriksa...</span>';
+
+    if (IS_CANVAS_PREVIEW) {
+      setTimeout(() => {
+        btn.disabled = false;
+        btn.innerHTML = '<span>Masuk Sistem</span>';
+        currentUser = { username: u, role: u === 'customer' ? 'Customer' : 'Super User', name: u.toUpperCase() };
+        postLoginSetup();
+      }, 500);
+      return;
+    }
+
+    google.script.run
+      .withSuccessHandler(function(res) {
+        btn.disabled = false;
+        btn.innerHTML = '<span>Masuk Sistem</span>';
+        if (res.success) {
+          currentUser = res.user;
+          postLoginSetup();
+        } else {
+          showToast(res.message, 'error');
+        }
+      })
+      .withFailureHandler(function(err) {
+        btn.disabled = false;
+        btn.innerHTML = '<span>Masuk Sistem</span>';
+        showToast('Error Server: ' + err.message, 'error');
+      })
+      .loginUser(u, p);
+  }
+
+  function postLoginSetup() {
+    document.getElementById('login-screen').classList.add('hidden');
+    document.getElementById('main-app').classList.remove('hidden');
+
+    document.getElementById('user-display-name').textContent = currentUser.name || currentUser.username;
+    document.getElementById('user-display-role').textContent = currentUser.role;
+
+    if (currentUser.role.toLowerCase() === 'customer') {
+      const btnAddEdc = document.getElementById('btn-add-edc');
+      const btnAddSim = document.getElementById('btn-add-sim');
+      const btnAddSam = document.getElementById('btn-add-sam');
+      if (btnAddEdc) btnAddEdc.classList.add('hidden');
+      if (btnAddSim) btnAddSim.classList.add('hidden');
+      if (btnAddSam) btnAddSam.classList.add('hidden');
+    }
+
+    loadDashboardData();
+    fetchStockData('EDC', 1);
+    fetchStockData('SIM', 1);
+    fetchStockData('SAM', 1);
+    showToast('Selamat datang, ' + currentUser.name, 'success');
+  }
+
+  function handleLogout() {
+    currentUser = null;
+    document.getElementById('main-app').classList.add('hidden');
+    document.getElementById('login-screen').classList.remove('hidden');
+    showToast('Berhasil keluar dari sistem', 'info');
+  }
+
+  function switchTab(tabName) {
+    ['dashboard', 'edc', 'sim', 'sam'].forEach(t => {
+      const btn = document.getElementById('tab-' + t);
+      const view = document.getElementById('view-' + t);
+      if (!btn || !view) return;
+      if (t === tabName) {
+        btn.className = 'px-4 py-2 rounded-xl font-medium text-sm transition flex items-center gap-2 bg-accent text-white shadow-sm';
+        view.classList.remove('hidden');
+      } else {
+        btn.className = 'px-4 py-2 rounded-xl font-medium text-sm transition flex items-center gap-2 text-gray-600 hover:bg-white';
+        view.classList.add('hidden');
+      }
+    });
+  }
+
+  function loadDashboardData() {
+    if (IS_CANVAS_PREVIEW) {
+      updateDashboardUI({
+        edc: { total: canvasMock.edc.length, available: 1, backup: 1, penarikan: 0 },
+        sim: { total: canvasMock.sim.length, available: 1, backup: 0, penarikan: 0 },
+        sam: { total: canvasMock.sam.length, available: 1, backup: 0, penarikan: 0 }
+      });
+      return;
+    }
+
+    google.script.run
+      .withSuccessHandler(res => {
+        if (res.success) {
+          updateDashboardUI(res.data);
+        }
+      })
+      .getDashboardStats();
+  }
+
+  function updateDashboardUI(d) {
+    document.getElementById('stat-edc-total').textContent = d.edc.total;
+    document.getElementById('stat-edc-available').textContent = d.edc.available;
+    document.getElementById('stat-edc-backup').textContent = d.edc.backup;
+    document.getElementById('stat-edc-penarikan').textContent = d.edc.penarikan;
+
+    document.getElementById('stat-sim-total').textContent = d.sim.total;
+    document.getElementById('stat-sim-available').textContent = d.sim.available;
+    document.getElementById('stat-sim-backup').textContent = d.sim.backup;
+    document.getElementById('stat-sim-penarikan').textContent = d.sim.penarikan;
+
+    document.getElementById('stat-sam-total').textContent = d.sam.total;
+    document.getElementById('stat-sam-available').textContent = d.sam.available;
+    document.getElementById('stat-sam-backup').textContent = d.sam.backup;
+    document.getElementById('stat-sam-penarikan').textContent = d.sam.penarikan;
+  }
+
+  function debounceFetch(type) {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(() => {
+      fetchStockData(type, 1);
+    }, 400);
+  }
+
+  function fetchStockData(type, page) {
+    const sheetName = 'Stock_' + type;
+    const searchVal = document.getElementById(type.toLowerCase() + '-search').value;
+    const statusVal = document.getElementById(type.toLowerCase() + '-filter-status').value;
+    const tableBody = document.getElementById('table-' + type.toLowerCase() + '-body');
+
+    tableBody.innerHTML = '<tr><td colspan="7" class="p-6 text-center text-gray-400">Memuat data ' + type + '...</td></tr>';
+
+    if (IS_CANVAS_PREVIEW) {
+      let list = canvasMock[type.toLowerCase()] || [];
+      renderTableRows(type, list);
+      renderPagination(type, 1, 1, list.length);
+      return;
+    }
+
+    google.script.run
+      .withSuccessHandler(res => {
+        if (res.success) {
+          paginationState[type].page = res.page;
+          paginationState[type].pages = res.pages;
+          renderTableRows(type, res.items);
+          renderPagination(type, res.page, res.pages, res.total);
+        } else {
+          tableBody.innerHTML = '<tr><td colspan="7" class="p-4 text-center text-red-500">' + res.message + '</td></tr>';
+        }
+      })
+      .getPaginatedStock(sheetName, page, paginationState[type].limit, searchVal, statusVal);
+  }
+
+  function renderTableRows(type, items) {
+    const tbody = document.getElementById('table-' + type.toLowerCase() + '-body');
+    if (!items || items.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="7" class="p-6 text-center text-gray-400">Data tidak ditemukan.</td></tr>';
+      return;
+    }
+
+    let html = '';
+    items.forEach(item => {
+      const badgeClass = 'badge-' + (item.Status || 'available').toLowerCase();
+      
+      if (type === 'EDC') {
+        const photoElem = item.Foto_Drive_URL 
+          ? '<a href="' + item.Foto_Drive_URL + '" target="_blank" class="text-accent hover:underline flex items-center gap-1"><i data-lucide="image" class="w-3.5 h-3.5"></i> Lihat</a>'
+          : '<span class="text-gray-300">-</span>';
+
+        html += '<tr class="hover:bg-blue-50/30 transition">' +
+          '<td class="p-3"><div class="font-bold text-gray-800">' + item.ID_EDC + '</div><div class="text-[10px] text-softtext">' + item.Vendor + '</div></td>' +
+          '<td class="p-3"><div class="font-medium">' + item.Lokasi + '</div><div class="text-[10px] text-gray-500">' + item.Type_EDC + '</div></td>' +
+          '<td class="p-3"><div class="font-mono text-xs">' + item.SN + '</div><div class="text-[10px] text-gray-400">IMEI: ' + item.IMEI + '</div></td>' +
+          '<td class="p-3"><span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-gray-100">' + item.Completeness + '</span> <span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-gray-100 ml-1">' + item.Condition + '</span></td>' +
+          '<td class="p-3"><span class="px-2.5 py-1 rounded-full text-[10px] font-bold ' + badgeClass + '">' + item.Status + '</span></td>' +
+          '<td class="p-3">' + photoElem + '</td>' +
+          '<td class="p-3">' + renderActionButtons('EDC', item.ID_EDC, item.Status) + '</td>' +
+        '</tr>';
+      } else if (type === 'SIM') {
+        html += '<tr class="hover:bg-blue-50/30 transition">' +
+          '<td class="p-3 font-bold text-gray-800">' + item.ID_SIM + '</td>' +
+          '<td class="p-3 font-medium text-gray-700">' + item.Provider + '</td>' +
+          '<td class="p-3 font-mono text-xs">' + item.ICCID_SN + '</td>' +
+          '<td class="p-3"><span class="px-2.5 py-1 rounded-full text-[10px] font-bold ' + badgeClass + '">' + item.Status + '</span></td>' +
+          '<td class="p-3 text-gray-500">' + (item.Note || '-') + '</td>' +
+          '<td class="p-3 text-gray-500 text-[11px]">' + item.Created_By + '</td>' +
+          '<td class="p-3">' + renderActionButtons('SIM', item.ID_SIM, item.Status) + '</td>' +
+        '</tr>';
+      } else if (type === 'SAM') {
+        html += '<tr class="hover:bg-blue-50/30 transition">' +
+          '<td class="p-3 font-bold text-gray-800">' + item.ID_SAM + '</td>' +
+          '<td class="p-3 font-medium text-gray-700">' + item.Provider + '</td>' +
+          '<td class="p-3 font-mono text-xs">' + item.ICCID_SN + '</td>' +
+          '<td class="p-3"><span class="px-2.5 py-1 rounded-full text-[10px] font-bold ' + badgeClass + '">' + item.Status + '</span></td>' +
+          '<td class="p-3 text-gray-500">' + (item.Note || '-') + '</td>' +
+          '<td class="p-3 text-gray-500 text-[11px]">' + item.Created_By + '</td>' +
+          '<td class="p-3">' + renderActionButtons('SAM', item.ID_SAM, item.Status) + '</td>' +
+        '</tr>';
+      }
+    });
+
+    tbody.innerHTML = html;
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+  }
+
+  function renderActionButtons(type, id, currentStatus) {
+    if (currentUser && currentUser.role.toLowerCase() === 'customer') {
+      return '<span class="text-gray-400 text-[10px]">Read Only</span>';
+    }
+    return '<select onchange="changeStatus(\'' + type + '\', \'' + id + '\', this.value)" class="neu-input text-[10px] px-2 py-1 bg-white">' +
+      '<option value="">Ubah Status...</option>' +
+      '<option value="Available">Available</option>' +
+      '<option value="Backup">Backup</option>' +
+      '<option value="Penarikan">Penarikan</option>' +
+    '</select>';
+  }
+
+  function renderPagination(type, page, totalPages, totalItems) {
+    const el = document.getElementById(type.toLowerCase() + '-pagination');
+    if (!el) return;
+    const prevDisabled = page <= 1 ? 'disabled' : '';
+    const nextDisabled = page >= totalPages ? 'disabled' : '';
+
+    el.innerHTML = '<span>Total: ' + totalItems + ' items (Hal ' + page + ' dari ' + totalPages + ')</span>' +
+      '<div class="flex gap-1">' +
+        '<button onclick="fetchStockData(\'' + type + '\', ' + (page - 1) + ')" ' + prevDisabled + ' class="px-3 py-1 rounded neu-card hover:bg-gray-50 text-xs disabled:opacity-40">Prev</button>' +
+        '<button onclick="fetchStockData(\'' + type + '\', ' + (page + 1) + ')" ' + nextDisabled + ' class="px-3 py-1 rounded neu-card hover:bg-gray-50 text-xs disabled:opacity-40">Next</button>' +
+      '</div>';
+  }
+
+  function changeStatus(type, id, newStatus) {
+    if (!newStatus) return;
+
+    if (IS_CANVAS_PREVIEW) {
+      const item = (canvasMock[type.toLowerCase()] || []).find(x => (x['ID_' + type] === id));
+      if (item) item.Status = newStatus;
+      showToast('Status ' + id + ' diperbarui ke ' + newStatus + ' (Optimistic)', 'success');
+      fetchStockData(type, paginationState[type].page);
+      loadDashboardData();
+      return;
+    }
+
+    showToast('Memproses update status ' + id + '...', 'info');
+
+    google.script.run
+      .withSuccessHandler(res => {
+        if (res.success) {
+          showToast(res.message, 'success');
+          fetchStockData(type, paginationState[type].page);
+          loadDashboardData();
+        } else {
+          showToast(res.message, 'error');
+        }
+      })
+      .updateStockStatus(type, id, newStatus, currentUser ? currentUser.username : 'User');
+  }
+
+  function openModalEDC() { document.getElementById('modal-edc').classList.remove('hidden'); }
+  function openModalSIM() { document.getElementById('modal-sim').classList.remove('hidden'); }
+  function openModalSAM() { document.getElementById('modal-sam').classList.remove('hidden'); }
+
+  function closeModal(modalId) {
+    document.getElementById(modalId).classList.add('hidden');
+  }
+
+  function previewSelectedPhoto(input) {
+    if (input.files && input.files[0]) {
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        document.getElementById('edc-foto-base64').value = e.target.result;
+        document.getElementById('edc-foto-preview-img').src = e.target.result;
+        document.getElementById('edc-foto-preview-box').classList.remove('hidden');
+      };
+      reader.readAsDataURL(input.files[0]);
+    }
+  }
+
+  function submitStockEDC(e) {
+    e.preventDefault();
+    const payload = {
+      lokasi: document.getElementById('edc-lokasi').value,
+      typeEDC: document.getElementById('edc-type').value,
+      sn: document.getElementById('edc-sn').value.trim(),
+      imei: document.getElementById('edc-imei').value.trim(),
+      completeness: document.getElementById('edc-completeness').value,
+      condition: document.getElementById('edc-condition').value,
+      status: document.getElementById('edc-status').value,
+      fotoBase64: document.getElementById('edc-foto-base64').value,
+      note: document.getElementById('edc-note').value.trim()
+    };
+
+    const btn = document.getElementById('btn-save-edc');
+    btn.disabled = true;
+    btn.innerHTML = '<span>Menyimpan...</span>';
+
+    if (IS_CANVAS_PREVIEW) {
+      setTimeout(() => {
+        btn.disabled = false;
+        btn.innerHTML = '<span>Simpan Stock EDC</span>';
+        canvasMock.edc.unshift({
+          ID_EDC: 'EDC-000' + (canvasMock.edc.length + 1),
+          Vendor: 'Verifone',
+          Lokasi: payload.lokasi,
+          Type_EDC: payload.typeEDC,
+          SN: payload.sn,
+          IMEI: payload.imei,
+          Completeness: payload.completeness,
+          Condition: payload.condition,
+          Status: payload.status,
+          Foto_Drive_URL: payload.fotoBase64,
+          Note: payload.note,
+          Created_By: currentUser ? currentUser.username : 'superuser'
+        });
+        closeModal('modal-edc');
+        document.getElementById('form-add-edc').reset();
+        document.getElementById('edc-foto-preview-box').classList.add('hidden');
+        showToast('Stock EDC berhasil disimpan (Optimistic UI)', 'success');
+        fetchStockData('EDC', 1);
+        loadDashboardData();
+      }, 500);
+      return;
+    }
+
+    google.script.run
+      .withSuccessHandler(res => {
+        btn.disabled = false;
+        btn.innerHTML = '<span>Simpan Stock EDC</span>';
+        if (res.success) {
+          closeModal('modal-edc');
+          document.getElementById('form-add-edc').reset();
+          document.getElementById('edc-foto-preview-box').classList.add('hidden');
+          showToast(res.message, 'success');
+          fetchStockData('EDC', 1);
+          loadDashboardData();
+        } else {
+          showToast(res.message, 'error');
+        }
+      })
+      .saveStockEDC(payload, currentUser ? currentUser.username : 'User');
+  }
+
+  function submitStockSIM(e) {
+    e.preventDefault();
+    const payload = {
+      provider: document.getElementById('sim-provider').value,
+      iccidSN: document.getElementById('sim-iccid').value.trim(),
+      status: document.getElementById('sim-status').value,
+      note: document.getElementById('sim-note').value.trim()
+    };
+
+    const btn = document.getElementById('btn-save-sim');
+    btn.disabled = true;
+
+    if (IS_CANVAS_PREVIEW) {
+      btn.disabled = false;
+      canvasMock.sim.unshift({
+        ID_SIM: 'SIM-000' + (canvasMock.sim.length + 1),
+        Provider: payload.provider,
+        ICCID_SN: payload.iccidSN,
+        Status: payload.status,
+        Note: payload.note,
+        Created_By: currentUser ? currentUser.username : 'admin'
+      });
+      closeModal('modal-sim');
+      document.getElementById('form-add-sim').reset();
+      showToast('Stock SIM Card berhasil disimpan', 'success');
+      fetchStockData('SIM', 1);
+      loadDashboardData();
+      return;
+    }
+
+    google.script.run
+      .withSuccessHandler(res => {
+        btn.disabled = false;
+        if (res.success) {
+          closeModal('modal-sim');
+          document.getElementById('form-add-sim').reset();
+          showToast(res.message, 'success');
+          fetchStockData('SIM', 1);
+          loadDashboardData();
+        } else {
+          showToast(res.message, 'error');
+        }
+      })
+      .saveStockSIM(payload, currentUser ? currentUser.username : 'User');
+  }
+
+  function submitStockSAM(e) {
+    e.preventDefault();
+    const payload = {
+      iccidSN: document.getElementById('sam-iccid').value.trim(),
+      status: document.getElementById('sam-status').value,
+      note: document.getElementById('sam-note').value.trim()
+    };
+
+    const btn = document.getElementById('btn-save-sam');
+    btn.disabled = true;
+
+    if (IS_CANVAS_PREVIEW) {
+      btn.disabled = false;
+      canvasMock.sam.unshift({
+        ID_SAM: 'SAM-000' + (canvasMock.sam.length + 1),
+        Provider: 'SAM BRI',
+        ICCID_SN: payload.iccidSN,
+        Status: payload.status,
+        Note: payload.note,
+        Created_By: currentUser ? currentUser.username : 'superuser'
+      });
+      closeModal('modal-sam');
+      document.getElementById('form-add-sam').reset();
+      showToast('Stock SAM Card berhasil disimpan', 'success');
+      fetchStockData('SAM', 1);
+      loadDashboardData();
+      return;
+    }
+
+    google.script.run
+      .withSuccessHandler(res => {
+        btn.disabled = false;
+        if (res.success) {
+          closeModal('modal-sam');
+          document.getElementById('form-add-sam').reset();
+          showToast(res.message, 'success');
+          fetchStockData('SAM', 1);
+          loadDashboardData();
+        } else {
+          showToast(res.message, 'error');
+        }
+      })
+      .saveStockSAM(payload, currentUser ? currentUser.username : 'User');
+  }
+
+  function triggerNativeCamera() {
+    const fileInput = document.getElementById('file-barcode-input');
+    if (fileInput) {
+      fileInput.value = '';
+      fileInput.click();
+    }
+  }
+
+  function triggerGalleryPicker() {
+    const galleryInput = document.getElementById('file-gallery-input');
+    if (galleryInput) {
+      galleryInput.value = '';
+      galleryInput.click();
+    }
+  }
+
+  function startCameraScanner(targetInputId) {
+    currentScanTargetInputId = targetInputId;
+    document.getElementById('modal-scanner').classList.remove('hidden');
+
+    if (html5QrCode && html5QrCode.isScanning) {
+      html5QrCode.stop().then(() => initAndStartScanner()).catch(() => initAndStartScanner());
+    } else {
+      initAndStartScanner();
+    }
+  }
+
+  function initAndStartScanner() {
+    if (!html5QrCode) {
+      html5QrCode = new Html5Qrcode("reader");
+    }
+
+    const config = { fps: 15, qrbox: { width: 220, height: 140 } };
+
+    const handleScanSuccess = (decodedText) => {
+      if (currentScanTargetInputId) {
+        const inputEl = document.getElementById(currentScanTargetInputId);
+        if (inputEl) {
+          inputEl.value = decodedText;
+        }
+        showToast('Barcode berhasil discan: ' + decodedText, 'success');
+      }
+      stopCameraScanner();
+    };
+
+    const handleScanError = (errorMessage) => {
+      // Continuous scanning frame error (ignore)
+    };
+
+    // Stage 1: Attempt Environment/Back Camera
+    html5QrCode.start(
+      { facingMode: "environment" },
+      config,
+      handleScanSuccess,
+      handleScanError
+    ).catch(err1 => {
+      // Stage 2: Fallback to Front/User Camera
+      html5QrCode.start(
+        { facingMode: "user" },
+        config,
+        handleScanSuccess,
+        handleScanError
+      ).catch(err2 => {
+        // Stage 3: Fallback to Generic Video Stream
+        html5QrCode.start(
+          true,
+          config,
+          handleScanSuccess,
+          handleScanError
+        ).catch(err3 => {
+          console.warn('Iframe WebRTC camera blocked by Apps Script policy, auto-triggering native OS camera...', err3);
+          showToast('Membuka aplikasi Kamera HP...', 'info');
+          setTimeout(() => {
+            triggerNativeCamera();
+          }, 300);
+        });
+      });
+    });
+  }
+
+  function scanBarcodeFromFile(fileInput) {
+    if (!fileInput.files || fileInput.files.length === 0) return;
+    const file = fileInput.files[0];
+
+    if (!html5QrCode) {
+      html5QrCode = new Html5Qrcode("reader");
+    }
+
+    showToast('Memproses gambar barcode / teks kartu...', 'info');
+
+    // Tahap 1: Pembacaan Barcode 1D / QR Code Biasa
+    html5QrCode.scanFile(file, true)
+      .then(decodedText => {
+        if (currentScanTargetInputId) {
+          const inputEl = document.getElementById(currentScanTargetInputId);
+          if (inputEl) {
+            inputEl.value = decodedText;
+          }
+          showToast('Barcode dari foto berhasil dibaca: ' + decodedText, 'success');
+        }
+        fileInput.value = '';
+        stopCameraScanner();
+      })
+      .catch(err => {
+        // Tahap 2: Fallback ke OCR Tesseract.js untuk Pembacaan Angka/Teks Cetak pada Kartu SIM & SAM
+        if (typeof Tesseract !== 'undefined') {
+          showToast('Garis barcode tidak terdeteksi. Membaca nomor cetak pada fisik kartu (OCR)...', 'info');
+
+          Tesseract.recognize(file, 'eng')
+            .then(({ data: { text } }) => {
+              let cleanedResult = '';
+
+              if (currentScanTargetInputId === 'sim-iccid') {
+                let prepText = text.toUpperCase()
+                  .replace(/O/g, '0')
+                  .replace(/[IL!|]/g, '1')
+                  .replace(/Z/g, '2')
+                  .replace(/S/g, '5')
+                  .replace(/G/g, '6')
+                  .replace(/B/g, '8');
+
+                const digitsArray = prepText.match(/\d+/g);
+                if (digitsArray) {
+                  cleanedResult = digitsArray.join('');
+                }
+              } else if (currentScanTargetInputId === 'sam-iccid') {
+                const validMatches = text.toUpperCase().match(/[A-Z0-9]{3,}/g);
+                if (validMatches && validMatches.length > 0) {
+                  cleanedResult = validMatches.join('');
+                } else {
+                  cleanedResult = text.toUpperCase().replace(/[^A-Z0-9]/g, '');
+                }
+              } else {
+                const validLines = text.split('\n')
+                  .map(line => line.trim().replace(/[^a-zA-Z0-9]/g, ''))
+                  .filter(line => line.length >= 2);
+                if (validLines.length > 0) {
+                  cleanedResult = validLines.join('');
+                }
+              }
+
+              if (cleanedResult && cleanedResult.length >= 2) {
+                if (currentScanTargetInputId) {
+                  const inputEl = document.getElementById(currentScanTargetInputId);
+                  if (inputEl) {
+                    inputEl.value = cleanedResult;
+                  }
+                }
+                showToast('Nomor/Teks kartu berhasil diekstrak: ' + cleanedResult, 'success');
+                fileInput.value = '';
+                stopCameraScanner();
+              } else {
+                fileInput.value = '';
+                showToast('Gagal membaca barcode maupun teks angka dari foto. Pastikan gambar jelas, terang, dan tidak buram.', 'error');
+              }
+            })
+            .catch(ocrError => {
+              console.error('OCR Processing Error:', ocrError);
+              fileInput.value = '';
+              showToast('Gagal memproses gambar. Pastikan foto fokus dan terang.', 'error');
+            });
+        } else {
+          fileInput.value = '';
+          showToast('Gagal membaca barcode dari foto. Pastikan gambar fokus, terang, dan terlihat jelas.', 'error');
+        }
+      });
+  }
+
+  function stopCameraScanner() {
+    const fileCam = document.getElementById('file-barcode-input');
+    const fileGal = document.getElementById('file-gallery-input');
+    if (fileCam) fileCam.value = '';
+    if (fileGal) fileGal.value = '';
+
+    if (html5QrCode && html5QrCode.isScanning) {
+      html5QrCode.stop().then(() => {
+        document.getElementById('modal-scanner').classList.add('hidden');
+      }).catch(err => {
+        document.getElementById('modal-scanner').classList.add('hidden');
+      });
+    } else {
+      document.getElementById('modal-scanner').classList.add('hidden');
+    }
+  }
+</script>
