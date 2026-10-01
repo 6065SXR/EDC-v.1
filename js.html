@@ -501,6 +501,10 @@
       .saveStockSAM(payload, currentUser ? currentUser.username : 'User');
   }
 
+  // ==========================================
+  // AI LENS OCR & BARCODE SCANNER LOGIC
+  // ==========================================
+
   function triggerNativeCamera() {
     const fileInput = document.getElementById('file-barcode-input');
     if (fileInput) {
@@ -520,12 +524,25 @@
   function startCameraScanner(targetInputId) {
     currentScanTargetInputId = targetInputId;
     document.getElementById('modal-scanner').classList.remove('hidden');
+    resetAiLensModal();
 
     if (html5QrCode && html5QrCode.isScanning) {
       html5QrCode.stop().then(() => initAndStartScanner()).catch(() => initAndStartScanner());
     } else {
       initAndStartScanner();
     }
+  }
+
+  function resetAiLensModal() {
+    const readerCon = document.getElementById('reader-container');
+    const loadingCon = document.getElementById('ai-lens-loading');
+    const resultCon = document.getElementById('ai-lens-result-box');
+
+    if (readerCon) readerCon.classList.remove('hidden');
+    if (loadingCon) loadingCon.classList.add('hidden');
+    if (loadingCon) loadingCon.classList.remove('flex');
+    if (resultCon) resultCon.classList.add('hidden');
+    if (resultCon) resultCon.classList.remove('flex');
   }
 
   function initAndStartScanner() {
@@ -547,41 +564,34 @@
     };
 
     const handleScanError = (errorMessage) => {
-      // Continuous scanning frame error (ignore)
+      // Continuous scanning frame error (ignored)
     };
 
-    // Stage 1: Attempt Environment/Back Camera
     html5QrCode.start(
       { facingMode: "environment" },
       config,
       handleScanSuccess,
       handleScanError
     ).catch(err1 => {
-      // Stage 2: Fallback to Front/User Camera
       html5QrCode.start(
         { facingMode: "user" },
         config,
         handleScanSuccess,
         handleScanError
       ).catch(err2 => {
-        // Stage 3: Fallback to Generic Video Stream
         html5QrCode.start(
           true,
           config,
           handleScanSuccess,
           handleScanError
         ).catch(err3 => {
-          console.warn('Iframe WebRTC camera blocked by Apps Script policy, auto-triggering native OS camera...', err3);
-          showToast('Membuka aplikasi Kamera HP...', 'info');
-          setTimeout(() => {
-            triggerNativeCamera();
-          }, 300);
+          console.warn('Iframe camera restricted, auto-triggering direct camera/gallery upload...', err3);
         });
       });
     });
   }
 
-  function scanBarcodeFromFile(fileInput) {
+  function processImageScanOrOcr(fileInput) {
     if (!fileInput.files || fileInput.files.length === 0) return;
     const file = fileInput.files[0];
 
@@ -589,9 +599,9 @@
       html5QrCode = new Html5Qrcode("reader");
     }
 
-    showToast('Memproses gambar barcode / teks kartu...', 'info');
+    showToast('Menganalisis gambar...', 'info');
 
-    // Tahap 1: Pembacaan Barcode 1D / QR Code Biasa
+    // Tahap 1: Coba scan Barcode / QR 1D terlebih dahulu
     html5QrCode.scanFile(file, true)
       .then(decodedText => {
         if (currentScanTargetInputId) {
@@ -599,74 +609,109 @@
           if (inputEl) {
             inputEl.value = decodedText;
           }
-          showToast('Barcode dari foto berhasil dibaca: ' + decodedText, 'success');
+          showToast('Barcode berhasil dibaca: ' + decodedText, 'success');
         }
         fileInput.value = '';
         stopCameraScanner();
       })
       .catch(err => {
-        // Tahap 2: Fallback ke OCR Tesseract.js untuk Pembacaan Angka/Teks Cetak pada Kartu SIM & SAM
-        if (typeof Tesseract !== 'undefined') {
-          showToast('Garis barcode tidak terdeteksi. Membaca nomor cetak pada fisik kartu (OCR)...', 'info');
+        // Tahap 2: Escalate ke AI Lens OCR (Gemini Vision)
+        showToast('Garis barcode tidak terdeteksi. Mengaktifkan AI Lens OCR...', 'info');
+        
+        document.getElementById('reader-container').classList.add('hidden');
+        const loadingBox = document.getElementById('ai-lens-loading');
+        loadingBox.classList.remove('hidden');
+        loadingBox.classList.add('flex');
 
-          Tesseract.recognize(file, 'eng')
-            .then(({ data: { text } }) => {
-              let cleanedResult = '';
-
-              if (currentScanTargetInputId === 'sim-iccid') {
-                let prepText = text.toUpperCase()
-                  .replace(/O/g, '0')
-                  .replace(/[IL!|]/g, '1')
-                  .replace(/Z/g, '2')
-                  .replace(/S/g, '5')
-                  .replace(/G/g, '6')
-                  .replace(/B/g, '8');
-
-                const digitsArray = prepText.match(/\d+/g);
-                if (digitsArray) {
-                  cleanedResult = digitsArray.join('');
-                }
-              } else if (currentScanTargetInputId === 'sam-iccid') {
-                const validMatches = text.toUpperCase().match(/[A-Z0-9]{3,}/g);
-                if (validMatches && validMatches.length > 0) {
-                  cleanedResult = validMatches.join('');
-                } else {
-                  cleanedResult = text.toUpperCase().replace(/[^A-Z0-9]/g, '');
-                }
-              } else {
-                const validLines = text.split('\n')
-                  .map(line => line.trim().replace(/[^a-zA-Z0-9]/g, ''))
-                  .filter(line => line.length >= 2);
-                if (validLines.length > 0) {
-                  cleanedResult = validLines.join('');
-                }
-              }
-
-              if (cleanedResult && cleanedResult.length >= 2) {
-                if (currentScanTargetInputId) {
-                  const inputEl = document.getElementById(currentScanTargetInputId);
-                  if (inputEl) {
-                    inputEl.value = cleanedResult;
-                  }
-                }
-                showToast('Nomor/Teks kartu berhasil diekstrak: ' + cleanedResult, 'success');
-                fileInput.value = '';
-                stopCameraScanner();
-              } else {
-                fileInput.value = '';
-                showToast('Gagal membaca barcode maupun teks angka dari foto. Pastikan gambar jelas, terang, dan tidak buram.', 'error');
-              }
-            })
-            .catch(ocrError => {
-              console.error('OCR Processing Error:', ocrError);
-              fileInput.value = '';
-              showToast('Gagal memproses gambar. Pastikan foto fokus dan terang.', 'error');
-            });
-        } else {
-          fileInput.value = '';
-          showToast('Gagal membaca barcode dari foto. Pastikan gambar fokus, terang, dan terlihat jelas.', 'error');
-        }
+        const reader = new FileReader();
+        reader.onload = function(e) {
+          const base64Data = e.target.result;
+          callGeminiOcrApi(base64Data);
+        };
+        reader.readAsDataURL(file);
       });
+  }
+
+  function callGeminiOcrApi(base64Data) {
+    if (IS_CANVAS_PREVIEW) {
+      setTimeout(() => {
+        let mockSn = "SN-VER-" + Math.floor(100000 + Math.random() * 900000);
+        let mockImei = "35678" + Math.floor(1000000000 + Math.random() * 9000000000);
+        let mockResult = "S/N: " + mockSn + "\nIMEI: " + mockImei + "\nICCID: 89620101" + Math.floor(10000000 + Math.random() * 90000000);
+        showAiLensResult(mockResult);
+      }, 1000);
+      return;
+    }
+
+    google.script.run
+      .withSuccessHandler(res => {
+        if (res.success && res.text) {
+          showAiLensResult(res.text);
+        } else {
+          showToast('Gagal mengekstrak teks dengan AI Lens', 'error');
+          resetAiLensModal();
+        }
+      })
+      .withFailureHandler(err => {
+        showToast('AI Lens Error: ' + err.message, 'error');
+        resetAiLensModal();
+      })
+      .getGeminiOcr(base64Data);
+  }
+
+  function showAiLensResult(extractedText) {
+    document.getElementById('ai-lens-loading').classList.add('hidden');
+    document.getElementById('ai-lens-loading').classList.remove('flex');
+    
+    const resultBox = document.getElementById('ai-lens-result-box');
+    resultBox.classList.remove('hidden');
+    resultBox.classList.add('flex');
+
+    const textarea = document.getElementById('ai-lens-extracted-text');
+    textarea.value = extractedText;
+
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+  }
+
+  function applyExtractedText() {
+    const fullText = document.getElementById('ai-lens-extracted-text').value;
+    if (!currentScanTargetInputId) return;
+
+    const targetInput = document.getElementById(currentScanTargetInputId);
+    if (!targetInput) return;
+
+    let cleanedText = parseOcrForTargetInput(fullText, currentScanTargetInputId);
+
+    targetInput.value = cleanedText;
+    showToast('Teks AI Lens berhasil dimasukkan!', 'success');
+    stopCameraScanner();
+  }
+
+  function parseOcrForTargetInput(fullText, targetInputId) {
+    if (!fullText) return '';
+    let lines = fullText.split('\n');
+    let cleanedText = fullText.trim();
+    let targetLower = (targetInputId || '').toLowerCase();
+
+    for (let line of lines) {
+      let upper = line.toUpperCase();
+      if (targetLower.includes('imei') && upper.includes('IMEI')) {
+        let parts = line.split(':');
+        cleanedText = parts[1] ? parts[1].trim() : line.trim();
+        break;
+      } else if ((targetLower.includes('sn') || targetLower.includes('iccid')) && (upper.includes('S/N') || upper.includes('SN') || upper.includes('ICCID'))) {
+        let parts = line.split(':');
+        cleanedText = parts[1] ? parts[1].trim() : line.trim();
+        break;
+      }
+    }
+
+    if (cleanedText.includes(':')) {
+      let parts = cleanedText.split(':');
+      if (parts.length > 1) cleanedText = parts[1].trim();
+    }
+
+    return cleanedText;
   }
 
   function stopCameraScanner() {
@@ -674,6 +719,8 @@
     const fileGal = document.getElementById('file-gallery-input');
     if (fileCam) fileCam.value = '';
     if (fileGal) fileGal.value = '';
+
+    resetAiLensModal();
 
     if (html5QrCode && html5QrCode.isScanning) {
       html5QrCode.stop().then(() => {
