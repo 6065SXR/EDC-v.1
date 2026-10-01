@@ -237,8 +237,9 @@ function uploadPhotoToDrive(base64Data, fileName) {
 
 /**
  * AI Lens OCR Processor via Gemini API (Vision Engine)
+ * Menggunakan konteks targetInputId untuk memisahkan logika EDC, SIM, dan SAM
  */
-function getGeminiOcr(base64Data) {
+function getGeminiOcr(base64Data, targetInputId) {
   try {
     if (!base64Data) return { success: false, message: 'Data gambar tidak ditemukan.' };
 
@@ -247,11 +248,23 @@ function getGeminiOcr(base64Data) {
       cleanBase64 = base64Data.split(',')[1];
     }
 
+    const targetLower = (targetInputId || '').toLowerCase();
     const apiKey = ""; // Disiapkan untuk API Key Gemini
     const apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=' + apiKey;
 
-    const systemPrompt = "Anda adalah mesin OCR profesional untuk label stiker perangkat EDC, SIM Card, dan SAM Card. Tugas Anda adalah mengekstrak teks persis seperti yang tertulis pada stiker. Baca baris per baris dengan format persis:\nS/N: [isi serial number]\nIMEI1: [isi imei 1]\nIMEI2: [isi imei 2]\nKembalikan HANYA teks murni hasil pembacaan gambar tanpa tambahan kata pengantar apapun.";
-    const userPrompt = "Ekstrak seluruh nomor S/N, IMEI1, IMEI2, atau ICCID dari stiker label ini.";
+    let systemPrompt = "Anda adalah mesin OCR profesional untuk label stiker perangkat EDC, SIM Card, dan SAM Card. Tugas Anda adalah mengekstrak teks persis seperti yang tertulis pada stiker atau fisik kartu.\n";
+    let userPrompt = "Ekstrak teks identifikasi dari gambar ini.";
+
+    if (targetLower.includes('sim')) {
+      systemPrompt += "Konteks: Ini adalah foto SIM Card. Jika nomor ICCID/SN dicetak bertumpuk dalam beberapa baris (vertikal/susun), baca dan tulis baris demi baris dari atas ke bawah secara berurutan. Kembalikan HANYA baris-baris angka tersebut.";
+      userPrompt = "Ekstrak nomor ICCID SIM Card yang tertulis bertumpuk/vertikal.";
+    } else if (targetLower.includes('sam')) {
+      systemPrompt += "Konteks: Ini adalah foto SAM Card. Ekstrak kode alfanumerik atau nomor unik yang tercetak pada permukaan/chip kartu SAM (contoh: 8E9C). Kembalikan HANYA kode tersebut.";
+      userPrompt = "Ekstrak kode alfanumerik fisik kartu SAM Card.";
+    } else {
+      systemPrompt += "Konteks: Ini adalah foto stiker EDC Verifone. Ekstrak Serial Number (S/N) dan IMEI.\nKembalikan HANYA teks murni hasil pembacaan gambar tanpa tambahan kata pengantar apapun.";
+      userPrompt = "Ekstrak Serial Number (S/N) dan IMEI dari stiker EDC.";
+    }
 
     const payload = {
       contents: [
@@ -291,10 +304,20 @@ function getGeminiOcr(base64Data) {
     }
   } catch (err) {
     console.error('Gemini OCR Error: ' + err.message);
-    const mockSn = "V1E0818495";
-    const mockImei1 = "866232050514084";
-    const mockImei2 = "866232050514092";
-    const mockText = "S/N: " + mockSn + "\nIMEI1: " + mockImei1 + "\nIMEI2: " + mockImei2;
+    const targetLower = (targetInputId || '').toLowerCase();
+    let mockText = '';
+
+    if (targetLower.includes('sim')) {
+      mockText = "6210\n0015\n9010\n4276\n00";
+    } else if (targetLower.includes('sam')) {
+      mockText = "8E9C";
+    } else {
+      const mockSn = "V1E0818495";
+      const mockImei1 = "866232050514084";
+      const mockImei2 = "866232050514092";
+      mockText = "S/N: " + mockSn + "\nIMEI1: " + mockImei1 + "\nIMEI2: " + mockImei2;
+    }
+
     return { success: true, text: mockText, isFallback: true };
   }
 }
