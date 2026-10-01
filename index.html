@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GCS Stock Inventory System</title>
+  
+  <?!= include('css'); ?>
+</head>
+<body class="min-h-screen pb-12">
+
+  <div id="toast-container" class="fixed top-5 right-5 z-50 flex flex-col gap-2 max-w-sm w-full pointer-events-none"></div>
+
+  <div id="login-screen" class="fixed inset-0 z-40 flex items-center justify-center p-4 bg-skybg">
+    <div class="neu-card p-8 w-full max-w-md text-center">
+      <div class="w-16 h-16 bg-accent/10 text-accent rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-inner">
+        <i data-lucide="shield-check" class="w-8 h-8"></i>
+      </div>
+      <h1 class="text-2xl font-bold text-gray-800">GCS Stock Inventory</h1>
+      <p class="text-sm text-softtext mt-1 mb-6">Silakan login untuk mengakses manajemen gudang</p>
+      
+      <form id="form-login" onsubmit="handleLogin(event)" class="space-y-4 text-left">
+        <div>
+          <label class="block text-xs font-semibold text-gray-600 mb-1">USERNAME</label>
+          <input type="text" id="login-username" required placeholder="Masukkan username" class="w-full px-4 py-3 neu-input text-sm">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-600 mb-1">PASSWORD</label>
+          <input type="password" id="login-password" required placeholder="••••••••" class="w-full px-4 py-3 neu-input text-sm">
+        </div>
+
+        <div class="pt-2">
+          <p class="text-xs text-gray-400 mb-2 font-medium">Quick Demo Login Role:</p>
+          <div class="grid grid-cols-2 gap-2 text-xs">
+            <button type="button" onclick="quickFill('superuser')" class="px-2 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-lg text-gray-700">Super User</button>
+            <button type="button" onclick="quickFill('admin')" class="px-2 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-lg text-gray-700">Admin</button>
+            <button type="button" onclick="quickFill('engineer')" class="px-2 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-lg text-gray-700">Engineer</button>
+            <button type="button" onclick="quickFill('customer')" class="px-2 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-lg text-gray-700">Customer</button>
+          </div>
+        </div>
+
+        <button type="submit" id="btn-login-submit" class="w-full py-3 neu-btn font-semibold text-sm flex items-center justify-center gap-2 mt-4">
+          <span>Masuk Sistem</span>
+          <i data-lucide="arrow-right" class="w-4 h-4"></i>
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <div id="main-app" class="hidden">
+    <header class="sticky top-0 z-30 bg-skybg/90 backdrop-blur-md border-b border-blue-100 px-4 py-3">
+      <div class="max-w-6xl mx-auto flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 bg-accent text-white rounded-xl flex items-center justify-center font-bold text-lg shadow-md">
+            GCS
+          </div>
+          <div>
+            <h1 class="font-bold text-base text-gray-800 leading-tight">Stock Inventory</h1>
+            <p class="text-xs text-softtext">EDC, SIM & SAM Card Gudang</p>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-3">
+          <div class="hidden sm:flex flex-col text-right">
+            <span id="user-display-name" class="text-sm font-semibold text-gray-800">User</span>
+            <span id="user-display-role" class="text-xs text-accent font-medium">Role</span>
+          </div>
+          <button onclick="handleLogout()" title="Logout" class="p-2 text-gray-500 hover:text-red-500 hover:bg-red-50 rounded-xl transition">
+            <i data-lucide="log-out" class="w-5 h-5"></i>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <div class="max-w-6xl mx-auto px-4 mt-6">
+      <div class="flex gap-2 border-b border-blue-200 pb-2 overflow-x-auto no-scrollbar">
+        <button onclick="switchTab('dashboard')" id="tab-dashboard" class="px-4 py-2 rounded-xl font-medium text-sm transition flex items-center gap-2 bg-accent text-white shadow-sm">
+          <i data-lucide="layout-dashboard" class="w-4 h-4"></i>
+          <span>Dashboard</span>
+        </button>
+        <button onclick="switchTab('edc')" id="tab-edc" class="px-4 py-2 rounded-xl font-medium text-sm transition flex items-center gap-2 text-gray-600 hover:bg-white">
+          <i data-lucide="cpu" class="w-4 h-4"></i>
+          <span>Stock EDC</span>
+        </button>
+        <button onclick="switchTab('sim')" id="tab-sim" class="px-4 py-2 rounded-xl font-medium text-sm transition flex items-center gap-2 text-gray-600 hover:bg-white">
+          <i data-lucide="sim-card" class="w-4 h-4"></i>
+          <span>Stock SIM</span>
+        </button>
+        <button onclick="switchTab('sam')" id="tab-sam" class="px-4 py-2 rounded-xl font-medium text-sm transition flex items-center gap-2 text-gray-600 hover:bg-white">
+          <i data-lucide="credit-card" class="w-4 h-4"></i>
+          <span>Stock SAM</span>
+        </button>
+      </div>
+    </div>
+
+    <main class="max-w-6xl mx-auto px-4 mt-6">
+
+      <!-- DASHBOARD VIEW -->
+      <section id="view-dashboard" class="space-y-6">
+        <div class="flex items-center justify-between">
+          <h2 class="text-xl font-bold text-gray-800">Rekap Status Gudang</h2>
+          <button onclick="loadDashboardData()" class="p-2 text-accent hover:bg-blue-50 rounded-lg text-xs font-semibold flex items-center gap-1">
+            <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Refresh
+          </button>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <!-- EDC Card -->
+          <div class="neu-card p-6 border border-blue-50">
+            <div class="flex items-center justify-between mb-4">
+              <span class="text-sm font-semibold text-gray-600">MESIN EDC</span>
+              <div class="p-2 bg-blue-50 text-accent rounded-xl">
+                <i data-lucide="cpu" class="w-5 h-5"></i>
+              </div>
+            </div>
+            <div class="text-3xl font-extrabold text-gray-800 mb-4" id="stat-edc-total">0</div>
+            <div class="grid grid-cols-3 gap-2 text-center text-xs font-semibold pt-3 border-t border-gray-100">
+              <div class="p-2 rounded-lg bg-green-50 text-green-700">
+                <div id="stat-edc-available">0</div>
+                <div class="text-[10px] opacity-75">Available</div>
+              </div>
+              <div class="p-2 rounded-lg bg-yellow-50 text-yellow-700">
+                <div id="stat-edc-backup">0</div>
+                <div class="text-[10px] opacity-75">Backup</div>
+              </div>
+              <div class="p-2 rounded-lg bg-red-50 text-red-700">
+                <div id="stat-edc-penarikan">0</div>
+                <div class="text-[10px] opacity-75">Penarikan</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- SIM Card -->
+          <div class="neu-card p-6 border border-blue-50">
+            <div class="flex items-center justify-between mb-4">
+              <span class="text-sm font-semibold text-gray-600">SIM CARD</span>
+              <div class="p-2 bg-blue-50 text-accent rounded-xl">
+                <i data-lucide="sim-card" class="w-5 h-5"></i>
+              </div>
+            </div>
+            <div class="text-3xl font-extrabold text-gray-800 mb-4" id="stat-sim-total">0</div>
+            <div class="grid grid-cols-3 gap-2 text-center text-xs font-semibold pt-3 border-t border-gray-100">
+              <div class="p-2 rounded-lg bg-green-50 text-green-700">
+                <div id="stat-sim-available">0</div>
+                <div class="text-[10px] opacity-75">Available</div>
+              </div>
+              <div class="p-2 rounded-lg bg-yellow-50 text-yellow-700">
+                <div id="stat-sim-backup">0</div>
+                <div class="text-[10px] opacity-75">Backup</div>
+              </div>
+              <div class="p-2 rounded-lg bg-red-50 text-red-700">
+                <div id="stat-sim-penarikan">0</div>
+                <div class="text-[10px] opacity-75">Penarikan</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- SAM Card -->
+          <div class="neu-card p-6 border border-blue-50">
+            <div class="flex items-center justify-between mb-4">
+              <span class="text-sm font-semibold text-gray-600">SAM CARD</span>
+              <div class="p-2 bg-blue-50 text-accent rounded-xl">
+                <i data-lucide="credit-card" class="w-5 h-5"></i>
+              </div>
+            </div>
+            <div class="text-3xl font-extrabold text-gray-800 mb-4" id="stat-sam-total">0</div>
+            <div class="grid grid-cols-3 gap-2 text-center text-xs font-semibold pt-3 border-t border-gray-100">
+              <div class="p-2 rounded-lg bg-green-50 text-green-700">
+                <div id="stat-sam-available">0</div>
+                <div class="text-[10px] opacity-75">Available</div>
+              </div>
+              <div class="p-2 rounded-lg bg-yellow-50 text-yellow-700">
+                <div id="stat-sam-backup">0</div>
+                <div class="text-[10px] opacity-75">Backup</div>
+              </div>
+              <div class="p-2 rounded-lg bg-red-50 text-red-700">
+                <div id="stat-sam-penarikan">0</div>
+                <div class="text-[10px] opacity-75">Penarikan</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="view-edc" class="hidden space-y-6">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <h2 class="text-xl font-bold text-gray-800">Manajemen Stok EDC</h2>
+            <p class="text-xs text-softtext">Atur inventaris EDC Verifone gudang</p>
+          </div>
+          <button id="btn-add-edc" onclick="openModalEDC()" class="neu-btn px-4 py-2.5 text-xs font-semibold flex items-center justify-center gap-2">
+            <i data-lucide="plus" class="w-4 h-4"></i>
+            <span>Tambah Stock EDC</span>
+          </button>
+        </div>
+
+        <!-- Filters -->
+        <div class="neu-card p-4 flex flex-col sm:flex-row items-center gap-3">
+          <div class="relative w-full sm:w-64">
+            <i data-lucide="search" class="w-4 h-4 absolute left-3 top-3 text-gray-400"></i>
+            <input type="text" id="edc-search" oninput="debounceFetch('EDC')" placeholder="Cari SN / IMEI / Note..." class="w-full pl-9 pr-3 py-2 neu-input text-xs">
+          </div>
+          <select id="edc-filter-status" onchange="fetchStockData('EDC', 1)" class="w-full sm:w-40 px-3 py-2 neu-input text-xs">
+            <option value="all">Semua Status</option>
+            <option value="available">Available</option>
+            <option value="backup">Backup</option>
+            <option value="penarikan">Penarikan</option>
+          </select>
+        </div>
+
+        <!-- Table -->
+        <div class="neu-card overflow-hidden">
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs">
+              <thead class="bg-blue-50/50 text-gray-600 font-semibold border-b border-blue-100">
+                <tr>
+                  <th class="p-3">ID / Vendor</th>
+                  <th class="p-3">Lokasi & Tipe</th>
+                  <th class="p-3">SN & IMEI</th>
+                  <th class="p-3">Kelengkapan & Kondisi</th>
+                  <th class="p-3">Status</th>
+                  <th class="p-3">Foto</th>
+                  <th class="p-3">Aksi</th>
+                </tr>
+              </thead>
+              <tbody id="table-edc-body" class="divide-y divide-gray-100 text-gray-700">
+                <tr><td colspan="7" class="p-6 text-center text-gray-400">Memuat data...</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <!-- Pagination -->
+          <div class="p-3 border-t border-gray-100 flex items-center justify-between text-xs text-softtext" id="edc-pagination">
+            <span>Halaman 1 dari 1</span>
+            <div class="flex gap-1">
+              <button class="px-3 py-1 rounded bg-gray-100 disabled:opacity-50" disabled>Prev</button>
+              <button class="px-3 py-1 rounded bg-gray-100 disabled:opacity-50" disabled>Next</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="view-sim" class="hidden space-y-6">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <h2 class="text-xl font-bold text-gray-800">Manajemen Stok SIM Card</h2>
+            <p class="text-xs text-softtext">Injeksi Telkomsel & Indosat</p>
+          </div>
+          <button id="btn-add-sim" onclick="openModalSIM()" class="neu-btn px-4 py-2.5 text-xs font-semibold flex items-center justify-center gap-2">
+            <i data-lucide="plus" class="w-4 h-4"></i>
+            <span>Tambah Stock SIM</span>
+          </button>
+        </div>
+
+        <!-- Filters -->
+        <div class="neu-card p-4 flex flex-col sm:flex-row items-center gap-3">
+          <div class="relative w-full sm:w-64">
+            <i data-lucide="search" class="w-4 h-4 absolute left-3 top-3 text-gray-400"></i>
+            <input type="text" id="sim-search" oninput="debounceFetch('SIM')" placeholder="Cari ICCID / Provider..." class="w-full pl-9 pr-3 py-2 neu-input text-xs">
+          </div>
+          <select id="sim-filter-status" onchange="fetchStockData('SIM', 1)" class="w-full sm:w-40 px-3 py-2 neu-input text-xs">
+            <option value="all">Semua Status</option>
+            <option value="available">Available</option>
+            <option value="backup">Backup</option>
+            <option value="penarikan">Penarikan</option>
+          </select>
+        </div>
+
+        <div class="neu-card overflow-hidden">
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs">
+              <thead class="bg-blue-50/50 text-gray-600 font-semibold border-b border-blue-100">
+                <tr>
+                  <th class="p-3">ID SIM</th>
+                  <th class="p-3">Provider</th>
+                  <th class="p-3">ICCID / SN</th>
+                  <th class="p-3">Status</th>
+                  <th class="p-3">Catatan</th>
+                  <th class="p-3">Dibuat Oleh</th>
+                  <th class="p-3">Aksi</th>
+                </tr>
+              </thead>
+              <tbody id="table-sim-body" class="divide-y divide-gray-100 text-gray-700">
+                <tr><td colspan="7" class="p-6 text-center text-gray-400">Memuat data...</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="p-3 border-t border-gray-100 flex items-center justify-between text-xs text-softtext" id="sim-pagination"></div>
+        </div>
+      </section>
+
+      <section id="view-sam" class="hidden space-y-6">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <h2 class="text-xl font-bold text-gray-800">Manajemen Stok SAM Card</h2>
+            <p class="text-xs text-softtext">SAM BRI Master Modules</p>
+          </div>
+          <button id="btn-add-sam" onclick="openModalSAM()" class="neu-btn px-4 py-2.5 text-xs font-semibold flex items-center justify-center gap-2">
+            <i data-lucide="plus" class="w-4 h-4"></i>
+            <span>Tambah Stock SAM</span>
+          </button>
+        </div>
+
+        <!-- Filters -->
+        <div class="neu-card p-4 flex flex-col sm:flex-row items-center gap-3">
+          <div class="relative w-full sm:w-64">
+            <i data-lucide="search" class="w-4 h-4 absolute left-3 top-3 text-gray-400"></i>
+            <input type="text" id="sam-search" oninput="debounceFetch('SAM')" placeholder="Cari ICCID SAM..." class="w-full pl-9 pr-3 py-2 neu-input text-xs">
+          </div>
+          <select id="sam-filter-status" onchange="fetchStockData('SAM', 1)" class="w-full sm:w-40 px-3 py-2 neu-input text-xs">
+            <option value="all">Semua Status</option>
+            <option value="available">Available</option>
+            <option value="backup">Backup</option>
+            <option value="penarikan">Penarikan</option>
+          </select>
+        </div>
+
+        <div class="neu-card overflow-hidden">
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs">
+              <thead class="bg-blue-50/50 text-gray-600 font-semibold border-b border-blue-100">
+                <tr>
+                  <th class="p-3">ID SAM</th>
+                  <th class="p-3">Provider</th>
+                  <th class="p-3">ICCID / SN SAM</th>
+                  <th class="p-3">Status</th>
+                  <th class="p-3">Catatan</th>
+                  <th class="p-3">Dibuat Oleh</th>
+                  <th class="p-3">Aksi</th>
+                </tr>
+              </thead>
+              <tbody id="table-sam-body" class="divide-y divide-gray-100 text-gray-700">
+                <tr><td colspan="7" class="p-6 text-center text-gray-400">Memuat data...</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="p-3 border-t border-gray-100 flex items-center justify-between text-xs text-softtext" id="sam-pagination"></div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <?!= include('modals'); ?>
+  <?!= include('js'); ?>
+
+</body>
+</html>
