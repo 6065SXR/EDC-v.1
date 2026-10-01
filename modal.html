@@ -1,0 +1,251 @@
+<div id="modal-edc" class="fixed inset-0 z-50 hidden bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+  <div class="neu-card p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
+    <div class="flex items-center justify-between mb-4 border-b border-gray-100 pb-3">
+      <h3 class="font-bold text-gray-800 text-base">Form Tambah Stock EDC</h3>
+      <button onclick="closeModal('modal-edc')" class="text-gray-400 hover:text-gray-600"><i data-lucide="x" class="w-5 h-5"></i></button>
+    </div>
+
+    <form id="form-add-edc" onsubmit="submitStockEDC(event)" class="space-y-4 text-xs">
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block font-semibold text-gray-600 mb-1">Vendor</label>
+          <input type="text" value="Verifone" readonly class="w-full px-3 py-2 neu-input bg-gray-100 font-medium">
+        </div>
+        <div>
+          <label class="block font-semibold text-gray-600 mb-1">Lokasi Gudang</label>
+          <select id="edc-lokasi" required class="w-full px-3 py-2 neu-input">
+            <option value="Jakarta">Jakarta</option>
+            <option value="Bandung">Bandung</option>
+            <option value="Surabaya">Surabaya</option>
+            <option value="Medan">Medan</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block font-semibold text-gray-600 mb-1">Type EDC</label>
+          <select id="edc-type" required class="w-full px-3 py-2 neu-input">
+            <option value="V2 Black White">V2 Black White</option>
+            <option value="V2 Colour">V2 Colour</option>
+            <option value="V4 Black White">V4 Black White</option>
+            <option value="V4 Colour">V4 Colour</option>
+          </select>
+        </div>
+        <div>
+          <label class="block font-semibold text-gray-600 mb-1">Status Initial</label>
+          <select id="edc-status" required class="w-full px-3 py-2 neu-input">
+            <option value="Available">Available</option>
+            <option value="Backup">Backup</option>
+            <option value="Penarikan">Penarikan</option>
+          </select>
+        </div>
+      </div>
+
+      <div>
+        <label class="block font-semibold text-gray-600 mb-1">Serial Number (SN)</label>
+        <div class="flex gap-2">
+          <input type="text" id="edc-sn" required placeholder="Klik untuk scan barcode SN..." onclick="startCameraScanner('edc-sn')" class="w-full px-3 py-2 neu-input cursor-pointer bg-blue-50/40 hover:bg-blue-50 transition">
+          <button type="button" onclick="startCameraScanner('edc-sn')" class="px-3 py-2 neu-btn text-xs flex items-center gap-1 shrink-0">
+            <i data-lucide="scan-barcode" class="w-4 h-4"></i> Scan
+          </button>
+        </div>
+      </div>
+
+      <div>
+        <label class="block font-semibold text-gray-600 mb-1">IMEI EDC</label>
+        <div class="flex gap-2">
+          <input type="text" id="edc-imei" required placeholder="Klik untuk scan barcode IMEI..." onclick="startCameraScanner('edc-imei')" class="w-full px-3 py-2 neu-input cursor-pointer bg-blue-50/40 hover:bg-blue-50 transition">
+          <button type="button" onclick="startCameraScanner('edc-imei')" class="px-3 py-2 neu-btn text-xs flex items-center gap-1 shrink-0">
+            <i data-lucide="scan-barcode" class="w-4 h-4"></i> Scan
+          </button>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block font-semibold text-gray-600 mb-1">Completeness</label>
+          <select id="edc-completeness" class="w-full px-3 py-2 neu-input">
+            <option value="Complete">Complete</option>
+            <option value="Incomplete">Incomplete</option>
+          </select>
+        </div>
+        <div>
+          <label class="block font-semibold text-gray-600 mb-1">Condition</label>
+          <select id="edc-condition" class="w-full px-3 py-2 neu-input">
+            <option value="New">New</option>
+            <option value="Good">Good</option>
+            <option value="Damage">Damage</option>
+          </select>
+        </div>
+      </div>
+
+      <div>
+        <label class="block font-semibold text-gray-600 mb-1">Foto Fisik EDC</label>
+        <input type="file" id="edc-foto-input" accept="image/*" onchange="previewSelectedPhoto(this)" class="w-full px-3 py-2 neu-input text-xs">
+        <input type="hidden" id="edc-foto-base64">
+        <div id="edc-foto-preview-box" class="mt-2 hidden">
+          <img id="edc-foto-preview-img" src="" class="h-28 rounded-lg object-cover border border-blue-200">
+        </div>
+      </div>
+
+      <div>
+        <label class="block font-semibold text-gray-600 mb-1">Catatan / Note</label>
+        <textarea id="edc-note" rows="2" placeholder="Catatan fisik/opsional..." class="w-full px-3 py-2 neu-input"></textarea>
+      </div>
+
+      <div class="flex justify-end gap-2 pt-3 border-t border-gray-100">
+        <button type="button" onclick="closeModal('modal-edc')" class="px-4 py-2 rounded-xl text-gray-500 hover:bg-gray-100">Batal</button>
+        <button type="submit" id="btn-save-edc" class="px-5 py-2 neu-btn font-semibold flex items-center gap-2">
+          <span>Simpan Stock EDC</span>
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div id="modal-sim" class="fixed inset-0 z-50 hidden bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+  <div class="neu-card p-6 w-full max-w-md">
+    <div class="flex items-center justify-between mb-4 border-b border-gray-100 pb-3">
+      <h3 class="font-bold text-gray-800 text-base">Form Tambah Stock SIM Card</h3>
+      <button onclick="closeModal('modal-sim')" class="text-gray-400 hover:text-gray-600"><i data-lucide="x" class="w-5 h-5"></i></button>
+    </div>
+
+    <form id="form-add-sim" onsubmit="submitStockSIM(event)" class="space-y-4 text-xs">
+      <div>
+        <label class="block font-semibold text-gray-600 mb-1">Provider</label>
+        <select id="sim-provider" required class="w-full px-3 py-2 neu-input">
+          <option value="Telkomsel">Telkomsel</option>
+          <option value="Indosat">Indosat</option>
+        </select>
+      </div>
+
+      <div>
+        <label class="block font-semibold text-gray-600 mb-1">ICCID / SN SIM Card</label>
+        <div class="flex gap-2">
+          <input type="text" id="sim-iccid" required placeholder="Klik untuk scan barcode / foto SIM Card..." onclick="startCameraScanner('sim-iccid')" class="w-full px-3 py-2 neu-input cursor-pointer bg-blue-50/40 hover:bg-blue-50 transition">
+          <button type="button" onclick="startCameraScanner('sim-iccid')" class="px-3 py-2 neu-btn text-xs flex items-center gap-1 shrink-0">
+            <i data-lucide="scan-barcode" class="w-4 h-4"></i> Scan
+          </button>
+        </div>
+      </div>
+
+      <div>
+        <label class="block font-semibold text-gray-600 mb-1">Status</label>
+        <select id="sim-status" required class="w-full px-3 py-2 neu-input">
+          <option value="Available">Available</option>
+          <option value="Backup">Backup</option>
+          <option value="Penarikan">Penarikan</option>
+        </select>
+      </div>
+
+      <div>
+        <label class="block font-semibold text-gray-600 mb-1">Catatan / Note</label>
+        <textarea id="sim-note" rows="2" placeholder="Catatan tambahan..." class="w-full px-3 py-2 neu-input"></textarea>
+      </div>
+
+      <div class="flex justify-end gap-2 pt-3 border-t border-gray-100">
+        <button type="button" onclick="closeModal('modal-sim')" class="px-4 py-2 rounded-xl text-gray-500 hover:bg-gray-100">Batal</button>
+        <button type="submit" id="btn-save-sim" class="px-5 py-2 neu-btn font-semibold flex items-center gap-2">
+          <span>Simpan Stock SIM</span>
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div id="modal-sam" class="fixed inset-0 z-50 hidden bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+  <div class="neu-card p-6 w-full max-w-md">
+    <div class="flex items-center justify-between mb-4 border-b border-gray-100 pb-3">
+      <h3 class="font-bold text-gray-800 text-base">Form Tambah Stock SAM Card</h3>
+      <button onclick="closeModal('modal-sam')" class="text-gray-400 hover:text-gray-600"><i data-lucide="x" class="w-5 h-5"></i></button>
+    </div>
+
+    <form id="form-add-sam" onsubmit="submitStockSAM(event)" class="space-y-4 text-xs">
+      <div>
+        <label class="block font-semibold text-gray-600 mb-1">Provider</label>
+        <input type="text" value="SAM BRI" readonly class="w-full px-3 py-2 neu-input bg-gray-100 font-medium">
+      </div>
+
+      <div>
+        <label class="block font-semibold text-gray-600 mb-1">ICCID / SN SAM Card</label>
+        <div class="flex gap-2">
+          <input type="text" id="sam-iccid" required placeholder="Klik untuk scan barcode / foto SAM Card..." onclick="startCameraScanner('sam-iccid')" class="w-full px-3 py-2 neu-input cursor-pointer bg-blue-50/40 hover:bg-blue-50 transition">
+          <button type="button" onclick="startCameraScanner('sam-iccid')" class="px-3 py-2 neu-btn text-xs flex items-center gap-1 shrink-0">
+            <i data-lucide="scan-barcode" class="w-4 h-4"></i> Scan
+          </button>
+        </div>
+      </div>
+
+      <div>
+        <label class="block font-semibold text-gray-600 mb-1">Status</label>
+        <select id="sam-status" required class="w-full px-3 py-2 neu-input">
+          <option value="Available">Available</option>
+          <option value="Backup">Backup</option>
+          <option value="Penarikan">Penarikan</option>
+        </select>
+      </div>
+
+      <div>
+        <label class="block font-semibold text-gray-600 mb-1">Catatan / Note</label>
+        <textarea id="sam-note" rows="2" placeholder="Catatan..." class="w-full px-3 py-2 neu-input"></textarea>
+      </div>
+
+      <div class="flex justify-end gap-2 pt-3 border-t border-gray-100">
+        <button type="button" onclick="closeModal('modal-sam')" class="px-4 py-2 rounded-xl text-gray-500 hover:bg-gray-100">Batal</button>
+        <button type="submit" id="btn-save-sam" class="px-5 py-2 neu-btn font-semibold flex items-center gap-2">
+          <span>Simpan Stock SAM</span>
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Compact Mobile-Friendly Scanner Modal -->
+<div id="modal-scanner" class="fixed inset-0 z-50 hidden bg-black/70 backdrop-blur-sm flex items-center justify-center p-3">
+  <div class="neu-card p-4 w-full max-w-sm max-h-[85vh] flex flex-col justify-between overflow-hidden shadow-2xl">
+    
+    <!-- Sticky Modal Header with Back / Close Button -->
+    <div class="flex items-center justify-between border-b border-gray-100 pb-2 mb-2 shrink-0">
+      <button type="button" onclick="stopCameraScanner()" class="flex items-center gap-1 text-xs text-softtext hover:text-accent font-semibold transition">
+        <i data-lucide="arrow-left" class="w-4 h-4"></i>
+        <span>Kembali</span>
+      </button>
+      <h4 class="font-bold text-gray-800 text-xs flex items-center gap-1.5">
+        <i data-lucide="camera" class="w-4 h-4 text-accent"></i>
+        <span>Scan Barcode / Foto</span>
+      </h4>
+      <button type="button" onclick="stopCameraScanner()" class="p-1 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition">
+        <i data-lucide="x" class="w-5 h-5"></i>
+      </button>
+    </div>
+
+    <!-- Compact Constrained Live Video / Photo Preview Container -->
+    <div id="reader-container" class="overflow-hidden rounded-xl bg-slate-900 h-44 relative flex items-center justify-center shrink-0 border border-slate-700">
+      <div id="reader" class="w-full h-full flex items-center justify-center [&_video]:max-h-44 [&_video]:object-contain [&_img]:max-h-44 [&_img]:object-contain"></div>
+    </div>
+
+    <!-- Compact Scanner Options -->
+    <div class="mt-3 pt-2 border-t border-gray-100 space-y-2 shrink-0">
+      <p class="text-[10px] text-gray-500 text-center font-medium">Pilih metode pengambilan gambar:</p>
+      
+      <!-- Option 1: Direct HP Camera Capture -->
+      <button type="button" onclick="triggerNativeCamera()" class="inline-flex items-center justify-center gap-2 px-3 py-2 neu-btn bg-accent text-white font-semibold text-xs transition w-full shadow-sm">
+        <i data-lucide="camera" class="w-3.5 h-3.5"></i>
+        <span>Buka Kamera HP & Foto Barcode</span>
+      </button>
+
+      <!-- Option 2: Gallery File Upload -->
+      <button type="button" onclick="triggerGalleryPicker()" class="inline-flex items-center justify-center gap-2 px-3 py-2 rounded-xl border border-blue-200 bg-white text-accent font-semibold text-xs transition w-full hover:bg-blue-50/50 shadow-sm">
+        <i data-lucide="image" class="w-3.5 h-3.5"></i>
+        <span>Upload Foto dari Galeri / File</span>
+      </button>
+
+      <!-- Hidden Input for Direct Camera Capture (capture="environment") -->
+      <input type="file" id="file-barcode-input" accept="image/*" capture="environment" onchange="scanBarcodeFromFile(this)" class="hidden">
+      
+      <!-- Hidden Input for Gallery / Local File Selection (NO capture attribute) -->
+      <input type="file" id="file-gallery-input" accept="image/*" onchange="scanBarcodeFromFile(this)" class="hidden">
+    </div>
+  </div>
+</div>
