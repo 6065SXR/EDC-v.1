@@ -16,8 +16,8 @@
   // Canvas Mock Database Memory
   const canvasMock = {
     edc: [
-      { ID_EDC: 'EDC-0001', Vendor: 'Verifone', Lokasi: 'Jakarta', Type_EDC: 'V2 Colour', SN: 'SN-VER-882191', IMEI: '356781092837101', Completeness: 'Complete', Condition: 'New', Status: 'Available', Foto_Drive_URL: '', Note: 'Ready Gudang Utama', Created_By: 'superuser' },
-      { ID_EDC: 'EDC-0002', Vendor: 'Verifone', Lokasi: 'Bandung', Type_EDC: 'V4 Colour', SN: 'SN-VER-882192', IMEI: '356781092837102', Completeness: 'Complete', Condition: 'Good', Status: 'Backup', Foto_Drive_URL: '', Note: 'Persiapan Support', Created_By: 'admin' }
+      { ID_EDC: 'EDC-0001', Vendor: 'Verifone', Lokasi: 'Jakarta', Type_EDC: 'V2 Colour', SN: 'V1E0818495', IMEI: '866232050514084', Completeness: 'Complete', Condition: 'New', Status: 'Available', Foto_Drive_URL: '', Note: 'Ready Gudang Utama', Created_By: 'superuser' },
+      { ID_EDC: 'EDC-0002', Vendor: 'Verifone', Lokasi: 'Bandung', Type_EDC: 'V4 Colour', SN: 'V1E0818496', IMEI: '866232050514085', Completeness: 'Complete', Condition: 'Good', Status: 'Backup', Foto_Drive_URL: '', Note: 'Persiapan Support', Created_By: 'admin' }
     ],
     sim: [
       { ID_SIM: 'SIM-0001', Provider: 'Telkomsel', ICCID_SN: '8962010198273641', Status: 'Available', Note: 'Stok Baru', Created_By: 'admin' }
@@ -501,10 +501,6 @@
       .saveStockSAM(payload, currentUser ? currentUser.username : 'User');
   }
 
-  // ==========================================
-  // AI LENS OCR & BARCODE SCANNER LOGIC
-  // ==========================================
-
   function triggerNativeCamera() {
     const fileInput = document.getElementById('file-barcode-input');
     if (fileInput) {
@@ -539,10 +535,14 @@
     const resultCon = document.getElementById('ai-lens-result-box');
 
     if (readerCon) readerCon.classList.remove('hidden');
-    if (loadingCon) loadingCon.classList.add('hidden');
-    if (loadingCon) loadingCon.classList.remove('flex');
-    if (resultCon) resultCon.classList.add('hidden');
-    if (resultCon) resultCon.classList.remove('flex');
+    if (loadingCon) {
+      loadingCon.classList.add('hidden');
+      loadingCon.classList.remove('flex');
+    }
+    if (resultCon) {
+      resultCon.classList.add('hidden');
+      resultCon.classList.remove('flex');
+    }
   }
 
   function initAndStartScanner() {
@@ -553,12 +553,14 @@
     const config = { fps: 15, qrbox: { width: 220, height: 140 } };
 
     const handleScanSuccess = (decodedText) => {
+      // Direct Live Camera Barcode
       if (currentScanTargetInputId) {
+        const cleanVal = filterOcrByContext(decodedText, currentScanTargetInputId);
         const inputEl = document.getElementById(currentScanTargetInputId);
         if (inputEl) {
-          inputEl.value = decodedText;
+          inputEl.value = cleanVal;
         }
-        showToast('Barcode berhasil discan: ' + decodedText, 'success');
+        showToast('Barcode berhasil discan: ' + cleanVal, 'success');
       }
       stopCameraScanner();
     };
@@ -585,7 +587,7 @@
           handleScanSuccess,
           handleScanError
         ).catch(err3 => {
-          console.warn('Iframe camera restricted, auto-triggering direct camera/gallery upload...', err3);
+          console.warn('Camera stream blocked, trigger upload...', err3);
         });
       });
     });
@@ -595,51 +597,30 @@
     if (!fileInput.files || fileInput.files.length === 0) return;
     const file = fileInput.files[0];
 
-    if (!html5QrCode) {
-      html5QrCode = new Html5Qrcode("reader");
-    }
+    document.getElementById('reader-container').classList.add('hidden');
+    const loadingBox = document.getElementById('ai-lens-loading');
+    loadingBox.classList.remove('hidden');
+    loadingBox.classList.add('flex');
 
-    showToast('Menganalisis gambar...', 'info');
+    showToast('Membaca stiker label dengan AI Lens...', 'info');
 
-    // Tahap 1: Coba scan Barcode / QR 1D terlebih dahulu
-    html5QrCode.scanFile(file, true)
-      .then(decodedText => {
-        if (currentScanTargetInputId) {
-          const inputEl = document.getElementById(currentScanTargetInputId);
-          if (inputEl) {
-            inputEl.value = decodedText;
-          }
-          showToast('Barcode berhasil dibaca: ' + decodedText, 'success');
-        }
-        fileInput.value = '';
-        stopCameraScanner();
-      })
-      .catch(err => {
-        // Tahap 2: Escalate ke AI Lens OCR (Gemini Vision)
-        showToast('Garis barcode tidak terdeteksi. Mengaktifkan AI Lens OCR...', 'info');
-        
-        document.getElementById('reader-container').classList.add('hidden');
-        const loadingBox = document.getElementById('ai-lens-loading');
-        loadingBox.classList.remove('hidden');
-        loadingBox.classList.add('flex');
-
-        const reader = new FileReader();
-        reader.onload = function(e) {
-          const base64Data = e.target.result;
-          callGeminiOcrApi(base64Data);
-        };
-        reader.readAsDataURL(file);
-      });
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      const base64Data = e.target.result;
+      callGeminiOcrApi(base64Data);
+    };
+    reader.readAsDataURL(file);
   }
 
   function callGeminiOcrApi(base64Data) {
     if (IS_CANVAS_PREVIEW) {
       setTimeout(() => {
-        let mockSn = "SN-VER-" + Math.floor(100000 + Math.random() * 900000);
-        let mockImei = "35678" + Math.floor(1000000000 + Math.random() * 9000000000);
-        let mockResult = "S/N: " + mockSn + "\nIMEI: " + mockImei + "\nICCID: 89620101" + Math.floor(10000000 + Math.random() * 90000000);
+        let mockSn = "V1E0818495";
+        let mockImei1 = "866232050514084";
+        let mockImei2 = "866232050514092";
+        let mockResult = "S/N: " + mockSn + "\nIMEI1: " + mockImei1 + "\nIMEI2: " + mockImei2;
         showAiLensResult(mockResult);
-      }, 1000);
+      }, 800);
       return;
     }
 
@@ -659,6 +640,87 @@
       .getGeminiOcr(base64Data);
   }
 
+  /**
+   * Smart Context Filter: Mengisolasi nilai murni (S/N / IMEI1 / ICCID) berdasarkan tombol scan yang diklik
+   */
+  function filterOcrByContext(fullText, targetInputId) {
+    if (!fullText) return '';
+    const lines = fullText.split('\n');
+    const targetLower = (targetInputId || '').toLowerCase();
+    let matchedValue = '';
+
+    for (let line of lines) {
+      let trimmed = line.trim();
+      if (!trimmed) continue;
+      let upper = trimmed.toUpperCase();
+
+      // Kasus 1: Target input IMEI -> Ambil IMEI1 atau IMEI
+      if (targetLower.includes('imei')) {
+        if (upper.includes('IMEI1') || upper.includes('IMEI 1')) {
+          matchedValue = trimmed.replace(/^IMEI1?[:\s\-]*/i, '').trim();
+          break;
+        } else if (upper.includes('IMEI') && !matchedValue) {
+          matchedValue = trimmed.replace(/^IMEI\d*[:\s\-]*/i, '').trim();
+        }
+      } 
+      // Kasus 2: Target input Serial Number (SN) EDC -> Ambil S/N
+      else if (targetLower.includes('sn') && !targetLower.includes('sim') && !targetLower.includes('sam')) {
+        if (upper.includes('S/N') || upper.includes('SN') || upper.includes('SERIAL')) {
+          matchedValue = trimmed
+            .replace(/^(S\/N|SN|SERIAL)[:\s\-]*/i, '')
+            .replace(/^SN-VER-/i, '')
+            .trim();
+          break;
+        }
+      } 
+      // Kasus 3: Target input SIM / SAM Card -> Ambil ICCID / S/N
+      else if (targetLower.includes('iccid') || targetLower.includes('sim') || targetLower.includes('sam')) {
+        if (upper.includes('ICCID') || upper.includes('S/N') || upper.includes('SN')) {
+          matchedValue = trimmed
+            .replace(/^(ICCID|S\/N|SN)[:\s\-]*/i, '')
+            .trim();
+          break;
+        }
+      }
+    }
+
+    // Fallback: Jika stiker label tidak menggunakan awalan S/N: atau IMEI1:
+    if (!matchedValue) {
+      if (targetLower.includes('imei')) {
+        // Cari deretan 14 - 16 angka khas IMEI
+        for (let line of lines) {
+          let digits = line.replace(/\D/g, '');
+          if (digits.length >= 14 && digits.length <= 16) {
+            matchedValue = digits;
+            break;
+          }
+        }
+      } else if (targetLower.includes('sn')) {
+        // Cari pola kode unik EDC (contoh: V1E0818495)
+        for (let line of lines) {
+          let trimmed = line.trim();
+          let match = trimmed.match(/[A-Z0-9]{8,15}/i);
+          if (match && !trimmed.toUpperCase().includes('IMEI') && !trimmed.toUpperCase().includes('MAC')) {
+            matchedValue = match[0];
+            break;
+          }
+        }
+      }
+    }
+
+    if (!matchedValue) {
+      matchedValue = fullText.trim();
+    }
+
+    // Pembersihan ekstra: Membuang sisa awalan label atau spasi samping
+    return matchedValue
+      .replace(/^(S\/N|SN|SERIAL|IMEI1?|IMEI2?|ICCID)[:\s\-]*/i, '')
+      .replace(/^SN-VER-/i, '')
+      .replace(/^[:\s\-]+/, '')
+      .split(' ')[0]
+      .trim();
+  }
+
   function showAiLensResult(extractedText) {
     document.getElementById('ai-lens-loading').classList.add('hidden');
     document.getElementById('ai-lens-loading').classList.remove('flex');
@@ -667,51 +729,25 @@
     resultBox.classList.remove('hidden');
     resultBox.classList.add('flex');
 
+    // Mengisolasi HANYA nilai spesifik murni sesuai kolom input yang di-scan (SN misal V1E0818495, IMEI misal 866232050514084)
+    const cleanContextValue = filterOcrByContext(extractedText, currentScanTargetInputId);
+
     const textarea = document.getElementById('ai-lens-extracted-text');
-    textarea.value = extractedText;
+    textarea.value = cleanContextValue;
 
     if (typeof lucide !== 'undefined') lucide.createIcons();
   }
 
   function applyExtractedText() {
-    const fullText = document.getElementById('ai-lens-extracted-text').value;
+    const textValue = document.getElementById('ai-lens-extracted-text').value.trim();
     if (!currentScanTargetInputId) return;
 
     const targetInput = document.getElementById(currentScanTargetInputId);
     if (!targetInput) return;
 
-    let cleanedText = parseOcrForTargetInput(fullText, currentScanTargetInputId);
-
-    targetInput.value = cleanedText;
-    showToast('Teks AI Lens berhasil dimasukkan!', 'success');
+    targetInput.value = textValue;
+    showToast('Nilai AI Lens berhasil dimasukkan!', 'success');
     stopCameraScanner();
-  }
-
-  function parseOcrForTargetInput(fullText, targetInputId) {
-    if (!fullText) return '';
-    let lines = fullText.split('\n');
-    let cleanedText = fullText.trim();
-    let targetLower = (targetInputId || '').toLowerCase();
-
-    for (let line of lines) {
-      let upper = line.toUpperCase();
-      if (targetLower.includes('imei') && upper.includes('IMEI')) {
-        let parts = line.split(':');
-        cleanedText = parts[1] ? parts[1].trim() : line.trim();
-        break;
-      } else if ((targetLower.includes('sn') || targetLower.includes('iccid')) && (upper.includes('S/N') || upper.includes('SN') || upper.includes('ICCID'))) {
-        let parts = line.split(':');
-        cleanedText = parts[1] ? parts[1].trim() : line.trim();
-        break;
-      }
-    }
-
-    if (cleanedText.includes(':')) {
-      let parts = cleanedText.split(':');
-      if (parts.length > 1) cleanedText = parts[1].trim();
-    }
-
-    return cleanedText;
   }
 
   function stopCameraScanner() {
