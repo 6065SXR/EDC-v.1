@@ -182,16 +182,27 @@
         </div>
       </section>
 
+      <!-- EDC VIEW WITH EXPORT BUTTONS -->
       <section id="view-edc" class="hidden space-y-6">
         <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <h2 class="text-xl font-bold text-gray-800">Manajemen Stok EDC</h2>
             <p class="text-xs text-softtext">Atur inventaris EDC Verifone gudang</p>
           </div>
-          <button id="btn-add-edc" onclick="openModalEDC()" class="neu-btn px-4 py-2.5 text-xs font-semibold flex items-center justify-center gap-2">
-            <i data-lucide="plus" class="w-4 h-4"></i>
-            <span>Tambah Stock EDC</span>
-          </button>
+          <div class="flex flex-wrap items-center gap-2">
+            <button onclick="exportStockExcel('EDC')" class="px-3 py-2.5 rounded-xl border border-blue-100 bg-white hover:bg-blue-50/50 text-gray-700 text-xs font-semibold flex items-center justify-center gap-1.5 shadow-sm transition">
+              <i data-lucide="file-spreadsheet" class="w-4 h-4 text-emerald-600"></i>
+              <span>Excel</span>
+            </button>
+            <button onclick="exportStockPDF('EDC')" class="px-3 py-2.5 rounded-xl border border-blue-100 bg-white hover:bg-blue-50/50 text-gray-700 text-xs font-semibold flex items-center justify-center gap-1.5 shadow-sm transition">
+              <i data-lucide="file-text" class="w-4 h-4 text-rose-600"></i>
+              <span>PDF</span>
+            </button>
+            <button id="btn-add-edc" onclick="openModalEDC()" class="neu-btn px-4 py-2.5 text-xs font-semibold flex items-center justify-center gap-2">
+              <i data-lucide="plus" class="w-4 h-4"></i>
+              <span>Tambah Stock EDC</span>
+            </button>
+          </div>
         </div>
 
         <!-- Filters -->
@@ -239,16 +250,27 @@
         </div>
       </section>
 
+      <!-- SIM VIEW WITH EXPORT BUTTONS -->
       <section id="view-sim" class="hidden space-y-6">
         <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <h2 class="text-xl font-bold text-gray-800">Manajemen Stok SIM Card</h2>
             <p class="text-xs text-softtext">Injeksi Telkomsel & Indosat</p>
           </div>
-          <button id="btn-add-sim" onclick="openModalSIM()" class="neu-btn px-4 py-2.5 text-xs font-semibold flex items-center justify-center gap-2">
-            <i data-lucide="plus" class="w-4 h-4"></i>
-            <span>Tambah Stock SIM</span>
-          </button>
+          <div class="flex flex-wrap items-center gap-2">
+            <button onclick="exportStockExcel('SIM')" class="px-3 py-2.5 rounded-xl border border-blue-100 bg-white hover:bg-blue-50/50 text-gray-700 text-xs font-semibold flex items-center justify-center gap-1.5 shadow-sm transition">
+              <i data-lucide="file-spreadsheet" class="w-4 h-4 text-emerald-600"></i>
+              <span>Excel</span>
+            </button>
+            <button onclick="exportStockPDF('SIM')" class="px-3 py-2.5 rounded-xl border border-blue-100 bg-white hover:bg-blue-50/50 text-gray-700 text-xs font-semibold flex items-center justify-center gap-1.5 shadow-sm transition">
+              <i data-lucide="file-text" class="w-4 h-4 text-rose-600"></i>
+              <span>PDF</span>
+            </button>
+            <button id="btn-add-sim" onclick="openModalSIM()" class="neu-btn px-4 py-2.5 text-xs font-semibold flex items-center justify-center gap-2">
+              <i data-lucide="plus" class="w-4 h-4"></i>
+              <span>Tambah Stock SIM</span>
+            </button>
+          </div>
         </div>
 
         <!-- Filters -->
@@ -288,16 +310,27 @@
         </div>
       </section>
 
+      <!-- SAM VIEW WITH EXPORT BUTTONS -->
       <section id="view-sam" class="hidden space-y-6">
         <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <h2 class="text-xl font-bold text-gray-800">Manajemen Stok SAM Card</h2>
             <p class="text-xs text-softtext">SAM BRI Master Modules</p>
           </div>
-          <button id="btn-add-sam" onclick="openModalSAM()" class="neu-btn px-4 py-2.5 text-xs font-semibold flex items-center justify-center gap-2">
-            <i data-lucide="plus" class="w-4 h-4"></i>
-            <span>Tambah Stock SAM</span>
-          </button>
+          <div class="flex flex-wrap items-center gap-2">
+            <button onclick="exportStockExcel('SAM')" class="px-3 py-2.5 rounded-xl border border-blue-100 bg-white hover:bg-blue-50/50 text-gray-700 text-xs font-semibold flex items-center justify-center gap-1.5 shadow-sm transition">
+              <i data-lucide="file-spreadsheet" class="w-4 h-4 text-emerald-600"></i>
+              <span>Excel</span>
+            </button>
+            <button onclick="exportStockPDF('SAM')" class="px-3 py-2.5 rounded-xl border border-blue-100 bg-white hover:bg-blue-50/50 text-gray-700 text-xs font-semibold flex items-center justify-center gap-1.5 shadow-sm transition">
+              <i data-lucide="file-text" class="w-4 h-4 text-rose-600"></i>
+              <span>PDF</span>
+            </button>
+            <button id="btn-add-sam" onclick="openModalSAM()" class="neu-btn px-4 py-2.5 text-xs font-semibold flex items-center justify-center gap-2">
+              <i data-lucide="plus" class="w-4 h-4"></i>
+              <span>Tambah Stock SAM</span>
+            </button>
+          </div>
         </div>
 
         <!-- Filters -->
