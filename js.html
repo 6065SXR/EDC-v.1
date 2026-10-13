@@ -2,8 +2,7 @@
   const IS_CANVAS_PREVIEW = (typeof google === 'undefined' || !google.script || !google.script.run);
   
   let currentUser = null;
-  let html5QrCode = null;
-  let currentScanTargetInputId = null;
+  let activeTargetInputId = null;
   let debounceTimer = null;
 
   // Pagination state
@@ -13,7 +12,7 @@
     SAM: { page: 1, limit: 8, pages: 1 }
   };
 
-  // Canvas Mock Database Memory
+  // Mock Database Memory untuk preview offline
   const canvasMock = {
     edc: [
       { ID_EDC: 'EDC-0001', Vendor: 'Verifone', Lokasi: 'Jakarta', Type_EDC: 'V2 Colour', SN: 'V1E0818495', IMEI: '866232050514084', Completeness: 'Complete', Condition: 'New', Status: 'Available', Foto_Drive_URL: '', Note: 'Ready Gudang Utama', Created_By: 'superuser' },
@@ -528,7 +527,7 @@
     }
 
     const keys = Object.keys(items[0]);
-    let csvContent = '\uFEFF'; // UTF-8 BOM
+    let csvContent = '\uFEFF';
     csvContent += keys.join(',') + '\n';
 
     items.forEach(item => {
@@ -641,40 +640,42 @@
     showToast('Jendela Laporan PDF ' + type + ' dibuka', 'success');
   }
 
-  function triggerNativeCamera() {
-    const fileInput = document.getElementById('file-barcode-input');
-    if (fileInput) {
-      fileInput.value = '';
-      fileInput.click();
+  function openAiLensModalForInput(targetInputId) {
+    activeTargetInputId = targetInputId;
+    const modal = document.getElementById('aiLensModal');
+    if (modal) {
+      modal.classList.remove('hidden');
     }
-  }
-
-  function triggerGalleryPicker() {
-    const galleryInput = document.getElementById('file-gallery-input');
-    if (galleryInput) {
-      galleryInput.value = '';
-      galleryInput.click();
-    }
+    resetAiLensModal();
   }
 
   function startCameraScanner(targetInputId) {
-    currentScanTargetInputId = targetInputId;
-    document.getElementById('modal-scanner').classList.remove('hidden');
-    resetAiLensModal();
+    openAiLensModalForInput(targetInputId);
+  }
 
-    if (html5QrCode && html5QrCode.isScanning) {
-      html5QrCode.stop().then(() => initAndStartScanner()).catch(() => initAndStartScanner());
-    } else {
-      initAndStartScanner();
+  function closeAiLensModal() {
+    const modal = document.getElementById('aiLensModal');
+    if (modal) {
+      modal.classList.add('hidden');
     }
+    resetAiLensModal();
+  }
+
+  function stopCameraScanner() {
+    closeAiLensModal();
   }
 
   function resetAiLensModal() {
-    const readerCon = document.getElementById('reader-container');
-    const loadingCon = document.getElementById('ai-lens-loading');
-    const resultCon = document.getElementById('ai-lens-result-box');
+    const uploadArea = document.getElementById('aiLensUploadArea');
+    const loadingCon = document.getElementById('aiLensLoading');
+    const resultCon = document.getElementById('aiLensResultView');
+    const fileInput = document.getElementById('aiLensInputFile');
+    const cameraInput = document.getElementById('aiLensCameraFile');
 
-    if (readerCon) readerCon.classList.remove('hidden');
+    if (uploadArea) {
+      uploadArea.classList.remove('hidden');
+      uploadArea.classList.add('flex');
+    }
     if (loadingCon) {
       loadingCon.classList.add('hidden');
       loadingCon.classList.remove('flex');
@@ -683,64 +684,45 @@
       resultCon.classList.add('hidden');
       resultCon.classList.remove('flex');
     }
+    if (fileInput) fileInput.value = '';
+    if (cameraInput) cameraInput.value = '';
+    if (typeof lucide !== 'undefined') lucide.createIcons();
   }
 
-  function initAndStartScanner() {
-    if (!html5QrCode) {
-      html5QrCode = new Html5Qrcode("reader");
+  function processAiLensImage(inputElement) {
+    if (!inputElement || !inputElement.files || inputElement.files.length === 0) return;
+    const file = inputElement.files[0];
+
+    const uploadArea = document.getElementById('aiLensUploadArea');
+    const loadingCon = document.getElementById('aiLensLoading');
+    const resultCon = document.getElementById('aiLensResultView');
+
+    if (uploadArea) {
+      uploadArea.classList.add('hidden');
+      uploadArea.classList.remove('flex');
+    }
+    if (resultCon) {
+      resultCon.classList.add('hidden');
+      resultCon.classList.remove('flex');
+    }
+    if (loadingCon) {
+      loadingCon.classList.remove('hidden');
+      loadingCon.classList.add('flex');
+      
+      const loadingTitle = loadingCon.querySelector('p:nth-child(2)');
+      const loadingSubtitle = loadingCon.querySelector('p:nth-child(3)');
+      if (loadingTitle) loadingTitle.textContent = 'Membaca barcode & teks stiker...';
+      if (loadingSubtitle) loadingSubtitle.textContent = 'Memindai langsung di browser pengguna...';
     }
 
-    const config = { fps: 15, qrbox: { width: 220, height: 140 } };
-
-    const handleScanSuccess = (decodedText) => {
-      if (currentScanTargetInputId) {
-        const cleanVal = filterOcrByContext(decodedText, currentScanTargetInputId);
-        const inputEl = document.getElementById(currentScanTargetInputId);
-        if (inputEl) {
-          inputEl.value = cleanVal;
-        }
-        showToast('Barcode berhasil discan: ' + cleanVal, 'success');
-      }
-      stopCameraScanner();
-    };
-
-    const handleScanError = (errorMessage) => {
-      // Continuous scanning frame error (ignored)
-    };
-
-    html5QrCode.start(
-      { facingMode: "environment" },
-      config,
-      handleScanSuccess,
-      handleScanError
-    ).catch(err1 => {
-      html5QrCode.start(
-        { facingMode: "user" },
-        config,
-        handleScanSuccess,
-        handleScanError
-      ).catch(err2 => {
-        html5QrCode.start(
-          true,
-          config,
-          handleScanSuccess,
-          handleScanError
-        ).catch(err3 => {
-          console.warn('Camera stream blocked, trigger upload...', err3);
-        });
-      });
-    });
-  }
-
-  function compressImageAndProcess(file, callback) {
     const reader = new FileReader();
     reader.onload = function(e) {
       const img = new Image();
-      img.onload = function() {
+      img.onload = async function() {
         const canvas = document.createElement('canvas');
         let width = img.width;
         let height = img.height;
-        const maxDim = 1280;
+        const maxDim = 1400;
 
         if (width > maxDim || height > maxDim) {
           if (width > height) {
@@ -754,226 +736,303 @@
 
         canvas.width = width;
         canvas.height = height;
-
         const ctx = canvas.getContext('2d');
         ctx.drawImage(img, 0, 0, width, height);
 
-        const compressedBase64 = canvas.toDataURL('image/jpeg', 0.82);
-        callback(compressedBase64);
-      };
-      img.onerror = function() {
-        callback(e.target.result);
+        await executeLocalOcrAndBarcode(canvas, file);
       };
       img.src = e.target.result;
     };
     reader.readAsDataURL(file);
   }
 
-  function processImageScanOrOcr(fileInput) {
-    if (!fileInput.files || fileInput.files.length === 0) return;
-    const file = fileInput.files[0];
+  async function executeLocalOcrAndBarcode(canvas, file) {
+    let detectedBarcodes = [];
+    let detectedOcrText = '';
 
-    if (html5QrCode && html5QrCode.isScanning) {
-      html5QrCode.stop().catch(() => {});
+    // 1. Deteksi Barcode Fisik (Barcode 1D Code128 / Code39 pada stiker Verifone)
+    if ('BarcodeDetector' in window) {
+      try {
+        const supportedFormats = await BarcodeDetector.getSupportedFormats();
+        const barcodeDetector = new BarcodeDetector({ formats: supportedFormats });
+        const barcodes = await barcodeDetector.detect(canvas);
+        if (barcodes && barcodes.length > 0) {
+          barcodes.forEach(b => {
+            if (b.rawValue && b.rawValue.trim()) {
+              detectedBarcodes.push(b.rawValue.trim());
+            }
+          });
+        }
+      } catch (err) {
+        console.warn('BarcodeDetector Native:', err);
+      }
     }
 
-    document.getElementById('reader-container').classList.add('hidden');
-    document.getElementById('ai-lens-result-box').classList.add('hidden');
+    // 2. Deteksi Karakter Fisik Teks via Tesseract.js (Client-side)
+    if (typeof Tesseract !== 'undefined') {
+      try {
+        const loadingSubtitle = document.querySelector('#aiLensLoading p:nth-child(3)');
+        const ocrResult = await Tesseract.recognize(canvas, 'eng', {
+          logger: m => {
+            if (loadingSubtitle && m.status === 'recognizing text') {
+              const pct = Math.round((m.progress || 0) * 100);
+              loadingSubtitle.textContent = 'Membaca label stiker (' + pct + '%)...';
+            }
+          }
+        });
 
-    const loadingBox = document.getElementById('ai-lens-loading');
-    loadingBox.classList.remove('hidden');
-    loadingBox.classList.add('flex');
+        if (ocrResult && ocrResult.data && ocrResult.data.text) {
+          detectedOcrText = ocrResult.data.text.trim();
+        }
+      } catch (err) {
+        console.warn('Tesseract OCR Client:', err);
+      }
+    }
 
-    compressImageAndProcess(file, function(compressedBase64) {
-      callGeminiOcrApi(compressedBase64);
-    });
+    // 3. Susun teks terdeteksi & hilangkan noise (BT MAC, WIFI MAC, MADE IN CHINA)
+    let finalFormattedResult = formatExtractedContent(detectedBarcodes, detectedOcrText);
+
+    if (!finalFormattedResult || finalFormattedResult.trim() === '') {
+      finalFormattedResult = "Foto belum terbaca jelas.\nPastikan stiker fokus, pencahayaan terang, dan posisi tegak.";
+    }
+
+    showAiLensResult(finalFormattedResult);
   }
 
-  function callGeminiOcrApi(base64Data) {
-    if (IS_CANVAS_PREVIEW) {
-      setTimeout(() => {
-        let mockResult = "S/N: V1E0818495\nIMEI1: 866232050514084\nIMEI2: 866232050514092";
-        if (currentScanTargetInputId && currentScanTargetInputId.includes('sim')) {
-          mockResult = "6210\n0015\n9010\n4276\n00";
-        } else if (currentScanTargetInputId && currentScanTargetInputId.includes('sam')) {
-          mockResult = "8E9C";
+  function formatExtractedContent(barcodes, ocrText) {
+    let resultLines = [];
+    const target = (activeTargetInputId || '').toLowerCase();
+
+    // Prioritaskan Barcode yang terbaca
+    if (barcodes && barcodes.length > 0) {
+      barcodes.forEach(code => {
+        const clean = code.trim();
+        if (/^\d{14,16}$/.test(clean)) {
+          if (!resultLines.some(l => l.includes(clean))) {
+            resultLines.push("IMEI1: " + clean);
+          }
+        } else if (/^[A-Z0-9]{8,15}$/i.test(clean)) {
+          if (!resultLines.some(l => l.includes(clean))) {
+            resultLines.unshift("S/N: " + clean);
+          }
         }
-        showAiLensResult(mockResult);
-      }, 600);
-      return;
+      });
     }
 
-    google.script.run
-      .withSuccessHandler(res => {
-        if (res.success && res.text) {
-          showAiLensResult(res.text);
-        } else {
-          showToast('Gagal mengekstrak teks dengan AI Lens', 'error');
-          resetAiLensModal();
-        }
-      })
-      .withFailureHandler(err => {
-        showToast('AI Lens Error: ' + err.message, 'error');
-        resetAiLensModal();
-      })
-      .getGeminiOcr(base64Data, currentScanTargetInputId);
-  }
+    // Parsing baris teks hasil OCR
+    if (ocrText && ocrText.trim()) {
+      const rawLines = ocrText.split('\n');
+      rawLines.forEach(l => {
+        const trimmed = l.trim();
+        if (!trimmed || trimmed.length < 3) return;
 
-  function filterOcrByContext(fullText, targetInputId) {
-    if (!fullText) return '';
-    const lines = fullText.split('\n');
-    const targetLower = (targetInputId || '').toLowerCase();
-    let matchedValue = '';
+        // Eliminasi teks yang tidak diperlukan
+        if (/MAC[:\s]/i.test(trimmed) || /MADE IN/i.test(trimmed)) return;
 
-    if (targetLower.includes('imei')) {
-      for (let line of lines) {
-        let trimmed = line.trim();
-        let upper = trimmed.toUpperCase();
-        if (upper.includes('IMEI1') || upper.includes('IMEI 1')) {
-          matchedValue = trimmed.replace(/^IMEI1?[:\s\-]*/i, '').trim();
-          break;
-        } else if (upper.includes('IMEI') && !matchedValue) {
-          matchedValue = trimmed.replace(/^IMEI\d*[:\s\-]*/i, '').trim();
-        }
-      }
-      if (!matchedValue) {
-        for (let line of lines) {
-          let digits = line.replace(/\D/g, '');
-          if (digits.length >= 14 && digits.length <= 16) {
-            matchedValue = digits;
-            break;
+        if (/^(S\/N|SN|SERIAL)/i.test(trimmed)) {
+          if (!resultLines.some(x => x.startsWith('S/N:'))) {
+            const cleanVal = trimmed.replace(/^(S\/N|SN|SERIAL)[:\s\-]*/i, '').trim();
+            resultLines.unshift("S/N: " + cleanVal);
           }
-        }
-      }
-    } 
-    else if (targetLower.includes('sn') && !targetLower.includes('sim') && !targetLower.includes('sam')) {
-      for (let line of lines) {
-        let trimmed = line.trim();
-        let upper = trimmed.toUpperCase();
-        if (upper.includes('S/N') || upper.includes('SN') || upper.includes('SERIAL')) {
-          matchedValue = trimmed
-            .replace(/^(S\/N|SN|SERIAL)[:\s\-]*/i, '')
-            .replace(/^SN-VER-/i, '')
-            .trim();
-          break;
-        }
-      }
-      if (!matchedValue) {
-        for (let line of lines) {
-          let trimmed = line.trim();
-          let match = trimmed.match(/[A-Z0-9]{8,15}/i);
-          if (match && !trimmed.toUpperCase().includes('IMEI') && !trimmed.toUpperCase().includes('MAC')) {
-            matchedValue = match[0];
-            break;
+        } else if (/^IMEI1?[:\s]/i.test(trimmed)) {
+          if (!resultLines.some(x => x.startsWith('IMEI1:'))) {
+            const cleanVal = trimmed.replace(/^IMEI1?[:\s\-]*/i, '').trim();
+            resultLines.push("IMEI1: " + cleanVal);
           }
-        }
-      }
-    } 
-    else if (targetLower.includes('sim')) {
-      for (let line of lines) {
-        let trimmed = line.trim();
-        let upper = trimmed.toUpperCase();
-        if (upper.includes('ICCID') || upper.includes('S/N') || upper.includes('SN')) {
-          matchedValue = trimmed.replace(/^(ICCID|S\/N|SN)[:\s\-]*/i, '').trim();
-          break;
-        }
-      }
-      if (!matchedValue) {
-        let accumulatedDigits = '';
-        for (let line of lines) {
-          let digitsOnly = line.replace(/\D/g, '');
-          if (digitsOnly.length > 0 && !line.toUpperCase().includes('IMEI') && !line.toUpperCase().includes('MAC')) {
-            accumulatedDigits += digitsOnly;
+        } else if (/^IMEI2[:\s]/i.test(trimmed)) {
+          if (!resultLines.some(x => x.startsWith('IMEI2:'))) {
+            const cleanVal = trimmed.replace(/^IMEI2[:\s\-]*/i, '').trim();
+            resultLines.push("IMEI2: " + cleanVal);
           }
+        } else if (target.includes('sim') && /^\d{10,20}$/.test(trimmed.replace(/\s+/g, ''))) {
+          resultLines.push("ICCID: " + trimmed.replace(/\s+/g, ''));
+        } else if (target.includes('sam') && /^[A-Z0-9]{3,12}$/i.test(trimmed)) {
+          resultLines.push("SAM: " + trimmed);
         }
-        if (accumulatedDigits.length >= 8) {
-          matchedValue = accumulatedDigits;
-        }
-      }
+      });
     }
-    else if (targetLower.includes('sam')) {
-      for (let line of lines) {
-        let trimmed = line.trim();
-        let upper = trimmed.toUpperCase();
-        if (upper.includes('ICCID') || upper.includes('S/N') || upper.includes('SN') || upper.includes('SAM')) {
-          matchedValue = trimmed.replace(/^(ICCID|S\/N|SN|SAM)[:\s\-]*/i, '').trim();
-          break;
-        }
-      }
-      if (!matchedValue) {
-        for (let line of lines) {
-          let trimmed = line.trim().replace(/[^A-Za-z0-9]/g, '');
-          if (trimmed.length >= 3 && trimmed.length <= 10 && !trimmed.toUpperCase().includes('IMEI') && !trimmed.toUpperCase().includes('CHINA')) {
-            matchedValue = trimmed;
-            break;
-          }
-        }
+
+    // Jika target kartu SIM bertumpuk secara vertikal
+    if (target.includes('sim') && ocrText && resultLines.length === 0) {
+      let numericBlock = '';
+      const lines = ocrText.split('\n');
+      lines.forEach(l => {
+        const digits = l.replace(/\D/g, '');
+        if (digits.length >= 2) numericBlock += digits;
+      });
+      if (numericBlock.length >= 10) {
+        resultLines.push("ICCID: " + numericBlock);
       }
     }
 
-    if (!matchedValue) {
-      matchedValue = fullText.trim();
-    }
-
-    return matchedValue
-      .replace(/^(S\/N|SN|SERIAL|IMEI1?|IMEI2?|ICCID|SAM)[:\s\-]*/i, '')
-      .replace(/^SN-VER-/i, '')
-      .replace(/^[:\s\-]+/, '')
-      .split(' ')[0]
-      .trim();
+    return resultLines.join('\n');
   }
 
   function showAiLensResult(extractedText) {
-    const loadingCon = document.getElementById('ai-lens-loading');
+    const loadingCon = document.getElementById('aiLensLoading');
     if (loadingCon) {
       loadingCon.classList.add('hidden');
       loadingCon.classList.remove('flex');
     }
     
-    const resultBox = document.getElementById('ai-lens-result-box');
-    if (resultBox) {
-      resultBox.classList.remove('hidden');
-      resultBox.classList.add('flex');
+    const resultCon = document.getElementById('aiLensResultView');
+    if (resultCon) {
+      resultCon.classList.remove('hidden');
+      resultCon.classList.add('flex');
     }
 
-    const cleanContextValue = filterOcrByContext(extractedText, currentScanTargetInputId);
-
-    const textarea = document.getElementById('ai-lens-extracted-text');
+    const textarea = document.getElementById('aiLensExtractedText');
     if (textarea) {
-      textarea.value = cleanContextValue;
+      textarea.value = extractedText;
     }
 
     if (typeof lucide !== 'undefined') lucide.createIcons();
   }
 
-  function applyExtractedText() {
-    const textValue = document.getElementById('ai-lens-extracted-text').value.trim();
-    if (!currentScanTargetInputId) return;
+  function parseStickerData(text) {
+    let sn = '';
+    let imei1 = '';
+    let imei2 = '';
+    let iccid = '';
+    let sam = '';
 
-    const targetInput = document.getElementById(currentScanTargetInputId);
-    if (!targetInput) return;
+    const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
 
-    targetInput.value = textValue;
-    showToast('Nilai AI Lens berhasil dimasukkan!', 'success');
-    stopCameraScanner();
+    for (let line of lines) {
+      // Abaikan baris MAC address dan Made In China
+      if (/MAC[:\s]/i.test(line) || /MADE IN/i.test(line)) continue;
+
+      // 1. Ekstrak Serial Number (S/N)
+      if (/^(S\/N|SN|SERIAL)[:\s\-]*/i.test(line)) {
+        let val = line.replace(/^(S\/N|SN|SERIAL)[:\s\-]*/i, '').trim();
+        val = val.split(/\s+/)[0];
+        if (val && !sn) sn = val;
+      }
+
+      // 2. Ekstrak IMEI1
+      if (/^IMEI1[:\s\-]*/i.test(line)) {
+        let val = line.replace(/^IMEI1[:\s\-]*/i, '').trim().split(/\s+/)[0];
+        let digits = val.replace(/\D/g, '');
+        if (digits.length >= 14 && digits.length <= 16) imei1 = digits;
+      }
+
+      // 3. Ekstrak IMEI Umum atau IMEI2
+      if (/^IMEI[:\s\-]*/i.test(line) && !imei1) {
+        let val = line.replace(/^IMEI[:\s\-]*/i, '').trim().split(/\s+/)[0];
+        let digits = val.replace(/\D/g, '');
+        if (digits.length >= 14 && digits.length <= 16) imei1 = digits;
+      }
+      if (/^IMEI2[:\s\-]*/i.test(line)) {
+        let val = line.replace(/^IMEI2[:\s\-]*/i, '').trim().split(/\s+/)[0];
+        let digits = val.replace(/\D/g, '');
+        if (digits.length >= 14 && digits.length <= 16) imei2 = digits;
+      }
+
+      // 4. Ekstrak ICCID (SIM Card)
+      if (/^ICCID[:\s\-]*/i.test(line)) {
+        let val = line.replace(/^ICCID[:\s\-]*/i, '').trim().replace(/\D/g, '');
+        if (val.length >= 8 && !iccid) iccid = val;
+      }
+
+      // 5. Ekstrak SAM Card
+      if (/^SAM[:\s\-]*/i.test(line)) {
+        let val = line.replace(/^SAM[:\s\-]*/i, '').trim().split(/\s+/)[0];
+        if (val && !sam) sam = val;
+      }
+    }
+
+    // Fallback pencarian S/N jika tidak ada prefix eksplisit
+    if (!sn) {
+      for (let line of lines) {
+        if (/MAC|CHINA|IMEI|ICCID/i.test(line)) continue;
+        let match = line.match(/\b([A-Z0-9]{8,14})\b/i);
+        if (match && !/^\d{14,16}$/.test(match[1])) {
+          sn = match[1];
+          break;
+        }
+      }
+    }
+
+    // Fallback pencarian IMEI (15 digit angka)
+    if (!imei1) {
+      for (let line of lines) {
+        if (/MAC/i.test(line)) continue;
+        let digits = line.replace(/\D/g, '');
+        if (digits.length >= 14 && digits.length <= 16) {
+          imei1 = digits;
+          break;
+        }
+      }
+    }
+
+    return { sn, imei: imei1 || imei2, iccid, sam };
   }
 
-  function stopCameraScanner() {
-    const fileCam = document.getElementById('file-barcode-input');
-    const fileGal = document.getElementById('file-gallery-input');
-    if (fileCam) fileCam.value = '';
-    if (fileGal) fileGal.value = '';
+  function applyExtractedText() {
+    const textarea = document.getElementById('aiLensExtractedText');
+    if (!textarea || !activeTargetInputId) return;
 
-    resetAiLensModal();
+    const fullText = textarea.value.trim();
+    const targetLower = activeTargetInputId.toLowerCase();
+    const parsed = parseStickerData(fullText);
 
-    if (html5QrCode && html5QrCode.isScanning) {
-      html5QrCode.stop().then(() => {
-        document.getElementById('modal-scanner').classList.add('hidden');
-      }).catch(err => {
-        document.getElementById('modal-scanner').classList.add('hidden');
-      });
-    } else {
-      document.getElementById('modal-scanner').classList.add('hidden');
+    // KONDISI KHUSUS FORM EDC: Otomatis isi kedua kolom (SN dan IMEI) sekaligus
+    if (targetLower.includes('edc')) {
+      const snInput = document.getElementById('edc-sn');
+      const imeiInput = document.getElementById('edc-imei');
+      let filledFields = [];
+
+      if (parsed.sn && snInput) {
+        snInput.value = parsed.sn;
+        filledFields.push('SN: ' + parsed.sn);
+      }
+      if (parsed.imei && imeiInput) {
+        imeiInput.value = parsed.imei;
+        filledFields.push('IMEI: ' + parsed.imei);
+      }
+
+      if (filledFields.length > 0) {
+        closeAiLensModal();
+        showToast('Berhasil mengisi ' + filledFields.join(' & '), 'success');
+        return;
+      }
+    }
+
+    // KONDISI FORM SIM CARD
+    if (targetLower.includes('sim')) {
+      const simInput = document.getElementById(activeTargetInputId);
+      if (simInput) {
+        const val = parsed.iccid || parsed.sn || fullText.replace(/\D/g, '');
+        simInput.value = val;
+        closeAiLensModal();
+        showToast('ICCID SIM Card berhasil dimasukkan: ' + val, 'success');
+        return;
+      }
+    }
+
+    // KONDISI FORM SAM CARD
+    if (targetLower.includes('sam')) {
+      const samInput = document.getElementById(activeTargetInputId);
+      if (samInput) {
+        let val = parsed.sam || parsed.sn || fullText;
+        val = val.replace(/^(SAM|ICCID|S\/N)[:\s\-]*/i, '').trim().split(/\s+/)[0];
+        samInput.value = val;
+        closeAiLensModal();
+        showToast('SN SAM Card berhasil dimasukkan: ' + val, 'success');
+        return;
+      }
+    }
+
+    // FALLBACK: Masukkan ke input tunggal yang aktif
+    const activeInput = document.getElementById(activeTargetInputId);
+    if (activeInput) {
+      let finalVal = targetLower.includes('imei') ? parsed.imei : parsed.sn;
+      if (!finalVal) {
+        finalVal = fullText.split('\n')[0].replace(/^[^:]*:\s*/, '').trim().split(/\s+/)[0];
+      }
+      activeInput.value = finalVal;
+      closeAiLensModal();
+      showToast('Nilai berhasil dimasukkan: ' + finalVal, 'success');
     }
   }
 </script>
