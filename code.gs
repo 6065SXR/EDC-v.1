@@ -6,6 +6,13 @@
 const SPREADSHEET_ID = SpreadsheetApp.getActiveSpreadsheet().getId();
 const TIMEZONE = 'Asia/Jakarta';
 
+// =========================================================================
+// PENGATURAN GEMINI API KEY (VISION OCR)
+// Dapatkan API Key gratis Anda di: https://aistudio.google.com/app/apikey
+// Tempelkan API Key Anda di dalam tanda kutip di bawah ini:
+// =========================================================================
+const GEMINI_API_KEY = ""; // <-- PASTE API KEY GEMINI ANDA DI SINI
+
 /**
  * Main Web App Entry Point
  */
@@ -168,7 +175,7 @@ function getPaginatedStock(sheetName, page, limit, search, statusFilter) {
         continue;
       }
 
-      // Check Search Filter (across all row text)
+      // Check Search Filter
       if (search) {
         const rowText = row.join(' ').toLowerCase();
         if (rowText.indexOf(search) === -1) {
@@ -184,7 +191,6 @@ function getPaginatedStock(sheetName, page, limit, search, statusFilter) {
       filtered.push(obj);
     }
 
-    // Reverse for latest first
     filtered.reverse();
 
     const total = filtered.length;
@@ -216,7 +222,6 @@ function uploadPhotoToDrive(base64Data, fileName) {
     const bytes = Utilities.base64Decode(base64Data.split(',')[1]);
     const blob = Utilities.newBlob(bytes, contentType, fileName);
 
-    // Create or get GCS Photos folder
     const folders = DriveApp.getFoldersByName('GCS_Stock_Photos');
     let folder;
     if (folders.hasNext()) {
@@ -231,17 +236,31 @@ function uploadPhotoToDrive(base64Data, fileName) {
     return file.getUrl();
   } catch (err) {
     console.error('Drive Upload Error: ' + err.message);
-    return base64Data; // Fallback return raw/placeholder
+    return base64Data;
   }
 }
 
 /**
  * AI Lens OCR Processor via Gemini API (Vision Engine)
- * Menggunakan konteks targetInputId untuk memisahkan logika EDC, SIM, dan SAM
+ * Membaca teks asli dari foto EDC, SIM Card, atau SAM Card secara presisi.
  */
 function getGeminiOcr(base64Data, targetInputId) {
   try {
-    if (!base64Data) return { success: false, message: 'Data gambar tidak ditemukan.' };
+    if (!base64Data) {
+      return { success: false, message: 'Data gambar tidak ditemukan.' };
+    }
+
+    // Ambil API Key dari konstanta atau Script Properties
+    const apiKey = (typeof GEMINI_API_KEY !== 'undefined' && GEMINI_API_KEY && GEMINI_API_KEY.trim() !== '')
+      ? GEMINI_API_KEY.trim()
+      : (PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY') || '').trim();
+
+    if (!apiKey) {
+      return {
+        success: false,
+        message: 'API Key Gemini belum diisi di backend (code.gs). Harap isi GEMINI_API_KEY di baris ke-16 code.gs dengan kunci gratis dari Google AI Studio.'
+      };
+    }
 
     let cleanBase64 = base64Data;
     if (base64Data.indexOf('data:image') !== -1) {
@@ -249,21 +268,18 @@ function getGeminiOcr(base64Data, targetInputId) {
     }
 
     const targetLower = (targetInputId || '').toLowerCase();
-    const apiKey = ""; // Disiapkan untuk API Key Gemini
-    const apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=' + apiKey;
+    // Menggunakan model Gemini 1.5 Flash resmi untuk Vision OCR
+    const apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=' + apiKey;
 
-    let systemPrompt = "Anda adalah mesin OCR profesional untuk label stiker perangkat EDC, SIM Card, dan SAM Card. Tugas Anda adalah mengekstrak teks persis seperti yang tertulis pada stiker atau fisik kartu.\n";
-    let userPrompt = "Ekstrak teks identifikasi dari gambar ini.";
+    let systemPrompt = "Anda adalah mesin OCR presisi tinggi untuk stiker identifikasi perangkat EDC Verifone. Tugas Anda membaca teks stiker persis seperti aslinya. Ekstrak Serial Number (S/N) dan IMEI jika ada. Format keluaran murni teks tanpa kata pengantar atau markdown.";
+    let userPrompt = "Ekstrak teks nomor Serial Number (S/N) dan IMEI dari foto stiker ini.";
 
     if (targetLower.includes('sim')) {
-      systemPrompt += "Konteks: Ini adalah foto SIM Card. Jika nomor ICCID/SN dicetak bertumpuk dalam beberapa baris (vertikal/susun), baca dan tulis baris demi baris dari atas ke bawah secara berurutan. Kembalikan HANYA baris-baris angka tersebut.";
-      userPrompt = "Ekstrak nomor ICCID SIM Card yang tertulis bertumpuk/vertikal.";
+      systemPrompt = "Anda adalah mesin OCR untuk kartu SIM. Ekstrak nomor ICCID atau nomor seri kartu SIM yang tercetak pada kartu. Jika nomor tercetak bersusun/vertikal dalam beberapa baris angka, tuliskan setiap baris angka tersebut secara berurutan. Format keluaran murni angka/teks tanpa kata pengantar.";
+      userPrompt = "Ekstrak nomor seri / ICCID dari kartu SIM ini.";
     } else if (targetLower.includes('sam')) {
-      systemPrompt += "Konteks: Ini adalah foto SAM Card. Ekstrak kode alfanumerik atau nomor unik yang tercetak pada permukaan/chip kartu SAM (contoh: 8E9C). Kembalikan HANYA kode tersebut.";
-      userPrompt = "Ekstrak kode alfanumerik fisik kartu SAM Card.";
-    } else {
-      systemPrompt += "Konteks: Ini adalah foto stiker EDC Verifone. Ekstrak Serial Number (S/N) dan IMEI.\nKembalikan HANYA teks murni hasil pembacaan gambar tanpa tambahan kata pengantar apapun.";
-      userPrompt = "Ekstrak Serial Number (S/N) dan IMEI dari stiker EDC.";
+      systemPrompt = "Anda adalah mesin OCR untuk kartu SAM. Ekstrak kode alfanumerik atau nomor seri unik yang tercetak pada chip atau permukaan kartu SAM. Format keluaran murni kode tanpa pengantar.";
+      userPrompt = "Ekstrak kode fisik kartu SAM ini.";
     }
 
     const payload = {
@@ -294,31 +310,24 @@ function getGeminiOcr(base64Data, targetInputId) {
     };
 
     const response = UrlFetchApp.fetch(apiUrl, options);
-    const json = JSON.parse(response.getContentText());
+    const statusCode = response.getResponseCode();
+    const responseText = response.getContentText();
+    const json = JSON.parse(responseText);
+
+    if (statusCode !== 200) {
+      const errMsg = (json.error && json.error.message) ? json.error.message : ('HTTP ' + statusCode);
+      return { success: false, message: 'Google API Error: ' + errMsg };
+    }
 
     if (json.candidates && json.candidates[0] && json.candidates[0].content && json.candidates[0].content.parts && json.candidates[0].content.parts[0].text) {
       const extractedText = json.candidates[0].content.parts[0].text.trim();
       return { success: true, text: extractedText };
     } else {
-      throw new Error('Respons AI OCR tidak mengembalikan teks');
+      return { success: false, message: 'Gemini tidak dapat mendeteksi teks pada foto ini. Pastikan foto fokus dan tidak buram.' };
     }
   } catch (err) {
-    console.error('Gemini OCR Error: ' + err.message);
-    const targetLower = (targetInputId || '').toLowerCase();
-    let mockText = '';
-
-    if (targetLower.includes('sim')) {
-      mockText = "6210\n0015\n9010\n4276\n00";
-    } else if (targetLower.includes('sam')) {
-      mockText = "8E9C";
-    } else {
-      const mockSn = "V1E0818495";
-      const mockImei1 = "866232050514084";
-      const mockImei2 = "866232050514092";
-      mockText = "S/N: " + mockSn + "\nIMEI1: " + mockImei1 + "\nIMEI2: " + mockImei2;
-    }
-
-    return { success: true, text: mockText, isFallback: true };
+    console.error('Gemini OCR Exception: ' + err.message);
+    return { success: false, message: 'Gagal memproses OCR: ' + err.message };
   }
 }
 
@@ -473,7 +482,7 @@ function updateStockStatus(entityType, recordId, newStatus, userName) {
 
     for (let i = 1; i < values.length; i++) {
       if (values[i][0] === recordId) {
-        foundRow = i + 1; // 1-indexed
+        foundRow = i + 1;
         break;
       }
     }
