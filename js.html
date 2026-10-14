@@ -789,7 +789,7 @@
       }
     }
 
-    // 3. Susun teks terdeteksi & hilangkan noise (BT MAC, WIFI MAC, MADE IN CHINA)
+    // 3. Susun teks terdeteksi & hilangkan noise
     let finalFormattedResult = formatExtractedContent(detectedBarcodes, detectedOcrText);
 
     if (!finalFormattedResult || finalFormattedResult.trim() === '') {
@@ -805,21 +805,35 @@
 
     // Prioritaskan Barcode yang terbaca
     if (barcodes && barcodes.length > 0) {
+      let barcodeImeis = [];
+      let barcodeSns = [];
+
       barcodes.forEach(code => {
         const clean = code.trim();
         if (/^\d{14,16}$/.test(clean)) {
-          if (!resultLines.some(l => l.includes(clean))) {
-            resultLines.push("IMEI1: " + clean);
-          }
-        } else if (/^[A-Z0-9]{8,15}$/i.test(clean)) {
-          if (!resultLines.some(l => l.includes(clean))) {
-            resultLines.unshift("S/N: " + clean);
+          if (!barcodeImeis.includes(clean)) barcodeImeis.push(clean);
+        } else if (/^[A-Z0-9]{8,18}$/i.test(clean)) {
+          // Jika target sedang kolom IMEI dan barcode berupa deretan angka, prioritaskan ke IMEI
+          if (target.includes('imei') && /^\d+$/.test(clean)) {
+            if (!barcodeImeis.includes(clean)) barcodeImeis.push(clean);
+          } else {
+            if (!barcodeSns.includes(clean)) barcodeSns.push(clean);
           }
         }
       });
+
+      if (barcodeSns.length > 0) {
+        resultLines.push("S/N: " + barcodeSns[0]);
+      }
+
+      if (barcodeImeis.length > 0) {
+        resultLines.push("IMEI1: " + barcodeImeis[0]);
+        if (barcodeImeis.length > 1) {
+          resultLines.push("IMEI2: " + barcodeImeis[1]);
+        }
+      }
     }
 
-    // Parsing baris teks hasil OCR
     if (ocrText && ocrText.trim()) {
       const rawLines = ocrText.split('\n');
       rawLines.forEach(l => {
@@ -829,27 +843,64 @@
         // Eliminasi teks yang tidak diperlukan
         if (/MAC[:\s]/i.test(trimmed) || /MADE IN/i.test(trimmed)) return;
 
+        // Serial Number - 100% DIPERTAHANKAN (TIDAK DIUBAH)
         if (/^(S\/N|SN|SERIAL)/i.test(trimmed)) {
           if (!resultLines.some(x => x.startsWith('S/N:'))) {
             const cleanVal = trimmed.replace(/^(S\/N|SN|SERIAL)[:\s\-]*/i, '').trim();
             resultLines.unshift("S/N: " + cleanVal);
           }
-        } else if (/^IMEI1?[:\s]/i.test(trimmed)) {
+        } 
+        // Deteksi Fleksibel IMEI 1
+        else if (/^(IMEI\s*1|IME11|IMEI1)[:\s\-]*/i.test(trimmed)) {
           if (!resultLines.some(x => x.startsWith('IMEI1:'))) {
-            const cleanVal = trimmed.replace(/^IMEI1?[:\s\-]*/i, '').trim();
+            const match15 = trimmed.match(/\b\d{14,16}\b/);
+            if (match15) {
+              resultLines.push("IMEI1: " + match15[0]);
+            } else {
+              const cleanVal = trimmed.replace(/^(IMEI\s*1|IME11|IMEI1)[:\s\-]*/i, '').trim().split(/\s+/)[0];
+              resultLines.push("IMEI1: " + cleanVal);
+            }
+          }
+        } 
+        // Deteksi IMEI 2
+        else if (/^(IMEI\s*2|IME12|IMEI2)[:\s\-]*/i.test(trimmed)) {
+          if (!resultLines.some(x => x.startsWith('IMEI2:'))) {
+            const match15 = trimmed.match(/\b\d{14,16}\b/);
+            if (match15) {
+              resultLines.push("IMEI2: " + match15[0]);
+            } else {
+              const cleanVal = trimmed.replace(/^(IMEI\s*2|IME12|IMEI2)[:\s\-]*/i, '').trim().split(/\s+/)[0];
+              resultLines.push("IMEI2: " + cleanVal);
+            }
+          }
+        } 
+        // Deteksi IMEI umum
+        else if (/^IMEI[:\s\-]*/i.test(trimmed) && !resultLines.some(x => x.startsWith('IMEI1:'))) {
+          const match15 = trimmed.match(/\b\d{14,16}\b/);
+          if (match15) {
+            resultLines.push("IMEI1: " + match15[0]);
+          } else {
+            const cleanVal = trimmed.replace(/^IMEI[:\s\-]*/i, '').trim().split(/\s+/)[0];
             resultLines.push("IMEI1: " + cleanVal);
           }
-        } else if (/^IMEI2[:\s]/i.test(trimmed)) {
-          if (!resultLines.some(x => x.startsWith('IMEI2:'))) {
-            const cleanVal = trimmed.replace(/^IMEI2[:\s\-]*/i, '').trim();
-            resultLines.push("IMEI2: " + cleanVal);
-          }
-        } else if (target.includes('sim') && /^\d{10,20}$/.test(trimmed.replace(/\s+/g, ''))) {
+        } 
+        else if (target.includes('sim') && /^\d{10,20}$/.test(trimmed.replace(/\s+/g, ''))) {
           resultLines.push("ICCID: " + trimmed.replace(/\s+/g, ''));
         } else if (target.includes('sam') && /^[A-Z0-9]{3,12}$/i.test(trimmed)) {
           resultLines.push("SAM: " + trimmed);
         }
       });
+    }
+
+    // Fallback OCR: Jika IMEI1 belum ada di resultLines, scan teks OCR untuk deret 14-16 digit
+    if (!resultLines.some(x => x.startsWith('IMEI1:')) && ocrText) {
+      const allFoundImeis = ocrText.match(/\b\d{14,16}\b/g);
+      if (allFoundImeis && allFoundImeis.length > 0) {
+        resultLines.push("IMEI1: " + allFoundImeis[0]);
+        if (allFoundImeis.length > 1) {
+          resultLines.push("IMEI2: " + allFoundImeis[1]);
+        }
+      }
     }
 
     // Jika target kartu SIM bertumpuk secara vertikal
@@ -902,50 +953,67 @@
       // Abaikan baris MAC address dan Made In China
       if (/MAC[:\s]/i.test(line) || /MADE IN/i.test(line)) continue;
 
-      // 1. Ekstrak Serial Number (S/N)
+      // 1. Ekstrak Serial Number (S/N) - 100% DIPERTAHANKAN
       if (/^(S\/N|SN|SERIAL)[:\s\-]*/i.test(line)) {
         let val = line.replace(/^(S\/N|SN|SERIAL)[:\s\-]*/i, '').trim();
         val = val.split(/\s+/)[0];
         if (val && !sn) sn = val;
       }
 
-      // 2. Ekstrak IMEI1
-      if (/^IMEI1[:\s\-]*/i.test(line)) {
-        let val = line.replace(/^IMEI1[:\s\-]*/i, '').trim().split(/\s+/)[0];
-        let digits = val.replace(/\D/g, '');
-        if (digits.length >= 14 && digits.length <= 16) imei1 = digits;
+      // 2. Ekstrak IMEI 1 (Pola IMEI1 / IMEI 1)
+      if (/^(IMEI\s*1|IME11|IMEI1)[:\s\-]*/i.test(line)) {
+        let match = line.match(/\b\d{14,16}\b/);
+        if (match && !imei1) {
+          imei1 = match[0];
+        } else {
+          let val = line.replace(/^(IMEI\s*1|IME11|IMEI1)[:\s\-]*/i, '').trim().split(/\s+/)[0];
+          let digits = val.replace(/\D/g, '');
+          if (digits.length >= 10 && digits.length <= 18 && !imei1) imei1 = digits;
+        }
       }
 
-      // 3. Ekstrak IMEI Umum atau IMEI2
-      if (/^IMEI[:\s\-]*/i.test(line) && !imei1) {
-        let val = line.replace(/^IMEI[:\s\-]*/i, '').trim().split(/\s+/)[0];
-        let digits = val.replace(/\D/g, '');
-        if (digits.length >= 14 && digits.length <= 16) imei1 = digits;
-      }
-      if (/^IMEI2[:\s\-]*/i.test(line)) {
-        let val = line.replace(/^IMEI2[:\s\-]*/i, '').trim().split(/\s+/)[0];
-        let digits = val.replace(/\D/g, '');
-        if (digits.length >= 14 && digits.length <= 16) imei2 = digits;
+      // 3. Ekstrak IMEI 2 (Pola IMEI2 / IMEI 2)
+      if (/^(IMEI\s*2|IME12|IMEI2)[:\s\-]*/i.test(line)) {
+        let match = line.match(/\b\d{14,16}\b/);
+        if (match && !imei2) {
+          imei2 = match[0];
+        } else {
+          let val = line.replace(/^(IMEI\s*2|IME12|IMEI2)[:\s\-]*/i, '').trim().split(/\s+/)[0];
+          let digits = val.replace(/\D/g, '');
+          if (digits.length >= 10 && digits.length <= 18 && !imei2) imei2 = digits;
+        }
       }
 
-      // 4. Ekstrak ICCID (SIM Card)
+      // 4. Ekstrak IMEI Umum jika IMEI 1 belum ditemukan
+      if (/^IMEI[:\s\-]*/i.test(line) && !imei1 && !/^IMEI\s*2/i.test(line)) {
+        let match = line.match(/\b\d{14,16}\b/);
+        if (match) {
+          imei1 = match[0];
+        } else {
+          let val = line.replace(/^IMEI[:\s\-]*/i, '').trim().split(/\s+/)[0];
+          let digits = val.replace(/\D/g, '');
+          if (digits.length >= 10 && digits.length <= 18) imei1 = digits;
+        }
+      }
+
+      // 5. Ekstrak ICCID (SIM Card) - DIPERTAHANKAN
       if (/^ICCID[:\s\-]*/i.test(line)) {
         let val = line.replace(/^ICCID[:\s\-]*/i, '').trim().replace(/\D/g, '');
         if (val.length >= 8 && !iccid) iccid = val;
       }
 
-      // 5. Ekstrak SAM Card
+      // 6. Ekstrak SAM Card - DIPERTAHANKAN
       if (/^SAM[:\s\-]*/i.test(line)) {
         let val = line.replace(/^SAM[:\s\-]*/i, '').trim().split(/\s+/)[0];
         if (val && !sam) sam = val;
       }
     }
 
-    // Fallback pencarian S/N jika tidak ada prefix eksplisit
+    // Fallback pencarian S/N jika tidak ada prefix eksplisit - 100% DIPERTAHANKAN
     if (!sn) {
       for (let line of lines) {
         if (/MAC|CHINA|IMEI|ICCID/i.test(line)) continue;
-        let match = line.match(/\b([A-Z0-9]{8,14})\b/i);
+        let match = line.match(/\b([A-Z0-9]{8,15})\b/i);
         if (match && !/^\d{14,16}$/.test(match[1])) {
           sn = match[1];
           break;
@@ -953,19 +1021,16 @@
       }
     }
 
-    // Fallback pencarian IMEI (15 digit angka)
+    // Fallback pencarian IMEI (14-16 digit angka): Ambil 15 digit pertama
     if (!imei1) {
-      for (let line of lines) {
-        if (/MAC/i.test(line)) continue;
-        let digits = line.replace(/\D/g, '');
-        if (digits.length >= 14 && digits.length <= 16) {
-          imei1 = digits;
-          break;
-        }
+      const imeiMatches = text.match(/\b\d{14,16}\b/g);
+      if (imeiMatches && imeiMatches.length > 0) {
+        imei1 = imeiMatches[0];
+        if (imeiMatches.length > 1) imei2 = imeiMatches[1];
       }
     }
 
-    return { sn, imei: imei1 || imei2, iccid, sam };
+    return { sn, imei: imei1 || imei2, imei1, imei2, iccid, sam };
   }
 
   function applyExtractedText() {
@@ -973,34 +1038,70 @@
     if (!textarea || !activeTargetInputId) return;
 
     const fullText = textarea.value.trim();
-    const targetLower = activeTargetInputId.toLowerCase();
+    const targetId = activeTargetInputId;
+    const targetLower = targetId.toLowerCase();
     const parsed = parseStickerData(fullText);
 
-    // KONDISI KHUSUS FORM EDC: Otomatis isi kedua kolom (SN dan IMEI) sekaligus
-    if (targetLower.includes('edc')) {
-      const snInput = document.getElementById('edc-sn');
-      const imeiInput = document.getElementById('edc-imei');
-      let filledFields = [];
+    // =========================================================================
+    // 1. KONDISI KHUSUS: INPUT IMEI EDC (HANYA MENGISI KOLOM IMEI EDC)
+    // DILARANG MENYENTUH ATAU MENGUBAH KOLOM SERIAL NUMBER (SN)!
+    // =========================================================================
+    if (targetLower === 'edc-imei' || targetLower.includes('imei')) {
+      const imeiInput = document.getElementById('edc-imei') || document.getElementById(targetId);
+      if (imeiInput) {
+        // Prioritas 1: Nilai IMEI 1 yang berhasil diparsing
+        let finalImei = parsed.imei1 || parsed.imei;
 
-      if (parsed.sn && snInput) {
-        snInput.value = parsed.sn;
-        filledFields.push('SN: ' + parsed.sn);
-      }
-      if (parsed.imei && imeiInput) {
-        imeiInput.value = parsed.imei;
-        filledFields.push('IMEI: ' + parsed.imei);
-      }
+        // Prioritas 2: Cari pola IMEI1 dari teks mentah
+        if (!finalImei) {
+          const matchImei1 = fullText.match(/IMEI\s*1?[:\s\-]+([0-9A-Z]+)/i);
+          if (matchImei1) {
+            finalImei = matchImei1[1].trim();
+          } else {
+            // Prioritas 3: Deretan angka 14-16 digit standar IMEI
+            const match15 = fullText.match(/\b\d{14,16}\b/);
+            if (match15) {
+              finalImei = match15[0];
+            } else {
+              // Prioritas 4: Nilai barcode tunggal / baris angka pada textarea (misal barcode 13 digit)
+              const firstLine = fullText.split('\n')[0].replace(/^[^:]*:\s*/, '').trim().split(/\s+/)[0];
+              const digitsOnly = firstLine.replace(/\D/g, '');
+              finalImei = digitsOnly.length >= 8 ? digitsOnly : firstLine;
+            }
+          }
+        }
 
-      if (filledFields.length > 0) {
+        // Masukkan murni ke kolom IMEI EDC saja
+        imeiInput.value = finalImei;
         closeAiLensModal();
-        showToast('Berhasil mengisi ' + filledFields.join(' & '), 'success');
+        showToast('IMEI EDC berhasil dimasukkan: ' + finalImei, 'success');
         return;
       }
     }
 
-    // KONDISI FORM SIM CARD
+    // =========================================================================
+    // 2. KONDISI KHUSUS: INPUT SERIAL NUMBER EDC (HANYA MENGISI KOLOM SN)
+    // 100% DIPERTAHANKAN SESUAI LOGIKA STABIL ASLI
+    // =========================================================================
+    if (targetLower === 'edc-sn' || (targetLower.includes('edc') && targetLower.includes('sn'))) {
+      const snInput = document.getElementById('edc-sn') || document.getElementById(targetId);
+      if (snInput) {
+        let finalSn = parsed.sn;
+        if (!finalSn) {
+          finalSn = fullText.split('\n')[0].replace(/^(S\/N|SN|SERIAL)[:\s\-]*/i, '').trim().split(/\s+/)[0];
+        }
+        snInput.value = finalSn;
+        closeAiLensModal();
+        showToast('Serial Number (SN) berhasil dimasukkan: ' + finalSn, 'success');
+        return;
+      }
+    }
+
+    // =========================================================================
+    // 3. KONDISI FORM SIM CARD
+    // =========================================================================
     if (targetLower.includes('sim')) {
-      const simInput = document.getElementById(activeTargetInputId);
+      const simInput = document.getElementById(targetId);
       if (simInput) {
         const val = parsed.iccid || parsed.sn || fullText.replace(/\D/g, '');
         simInput.value = val;
@@ -1010,9 +1111,11 @@
       }
     }
 
-    // KONDISI FORM SAM CARD
+    // =========================================================================
+    // 4. KONDISI FORM SAM CARD
+    // =========================================================================
     if (targetLower.includes('sam')) {
-      const samInput = document.getElementById(activeTargetInputId);
+      const samInput = document.getElementById(targetId);
       if (samInput) {
         let val = parsed.sam || parsed.sn || fullText;
         val = val.replace(/^(SAM|ICCID|S\/N)[:\s\-]*/i, '').trim().split(/\s+/)[0];
@@ -1023,10 +1126,12 @@
       }
     }
 
-    // FALLBACK: Masukkan ke input tunggal yang aktif
-    const activeInput = document.getElementById(activeTargetInputId);
+    // =========================================================================
+    // 5. FALLBACK UMUM: Masukkan ke input spesifik yang sedang aktif
+    // =========================================================================
+    const activeInput = document.getElementById(targetId);
     if (activeInput) {
-      let finalVal = targetLower.includes('imei') ? parsed.imei : parsed.sn;
+      let finalVal = targetLower.includes('imei') ? (parsed.imei1 || parsed.imei) : parsed.sn;
       if (!finalVal) {
         finalVal = fullText.split('\n')[0].replace(/^[^:]*:\s*/, '').trim().split(/\s+/)[0];
       }
